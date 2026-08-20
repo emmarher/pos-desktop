@@ -9,7 +9,7 @@
  * Las pantallas reales se portan en F4; mientras tanto se usan placeholders
  * ligeros para mantener el arranque y el splash verificado.
  */
-import {Routes, Route, Navigate, useLocation} from 'react-router-dom';
+import {Routes, Route, Navigate} from 'react-router-dom';
 import {useAuthStore} from '../stores/auth.store';
 
 /* ── Placeholders temporales (se reemplazan en F4) ────────────────────── */
@@ -29,7 +29,6 @@ function Placeholder({title}: {title: string}) {
 export default function AppRoutes() {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const licenseState = useAuthStore(state => state.licenseState);
-  const location = useLocation();
 
   if (licenseState === 'expired') {
     return (
@@ -49,16 +48,7 @@ export default function AppRoutes() {
     );
   }
 
-  // Sin sesión: arranque de conexión. Evitar redirecciones cuando ya se
-  // está en una ruta válida de pre-login.
-  if (location.pathname !== '/login') {
-    return (
-      <Routes>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    );
-  }
-
+  // Sin sesión: arranque de conexión → login.
   return (
     <Routes>
       <Route path="/" element={<Placeholder title="Conectar servidor" />} />
