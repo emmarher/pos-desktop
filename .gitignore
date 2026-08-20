@@ -1,0 +1,48 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+target/
+src-tauri/target/
+src-tauri/gen/
+
+# Cache de Vite / Rust
+.vite/
+*.log
+
+# IDE y sistema
+.vscode/
+.idea/
+*.sln
+*.suo
+Thumbs.db
+Desktop.ini
+
+# Entorno
+.env
+.env.local
+.env.*.local
+
+# Artefactos de Tauri / instaladores
+*.msi
+*.exe
+*.nupkg
+*.appx
+*.pkg
+*.dmg
+
+# Certificados y secretos (nunca commitear)
+*.pfx
+*.cer
+*.key
+*.pem
+!src-tauri/icons/icon.ico
+!src-tauri/icons/*.png
+
+# Cobertura y reportes
+coverage/
+reports/
+
+# Archivos temporales del SO
+.DS_Store

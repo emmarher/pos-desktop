@@ -1,0 +1,115 @@
+/**
+ * styles/main.css — Tokens del design system glass + estilos base.
+ *
+ * Los tokens vienen de constants/theme.ts (posTheme). El tema se aplica
+ * vía data-theme="light|dark" en <html> desde lib/theme.ts; los valores
+ * se reescriben como variables CSS aquí abajo.
+ */
+@import 'tailwindcss';
+
+:root {
+  --font-micro: 11px;
+  --font-small: 13px;
+  --font-regular: 16px;
+  --font-medium: 20px;
+  --font-large: 24px;
+  --font-xlarge: 32px;
+  --font-xxlarge: 40px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-xxl: 36px;
+
+  --radius-sm: 6px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-round: 999px;
+
+  --glass-opacity: 0.55;
+  --glass-blur: 20px;
+}
+
+html[data-theme='light'] {
+  --color-background: #f8f9ff;
+  --color-surface: rgba(123, 154, 166, 0.41);
+  --color-surface-solid: #ffffff;
+  --color-input: rgba(255, 255, 255, 0.9);
+  --color-primary: #4678d4;
+  --color-primary-dark: #3839a9;
+  --color-primary-soft: #ececfb;
+  --color-on-primary: #ffffff;
+  --color-secondary: #006c49;
+  --color-secondary-soft: #e0f4ec;
+  --color-text: #000000;
+  --color-text-secondary: #050506;
+  --color-text-disabled: #a5a7c0;
+  --color-border: rgba(70, 72, 212, 0.12);
+  --color-border-glass: rgba(148, 189, 235, 0.78);
+  --color-danger: #c62828;
+  --color-danger-soft: rgba(198, 40, 40, 0.1);
+  --color-success: #006c49;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+  --color-info: #4648d4;
+  --color-shadow: rgba(23, 24, 50, 0.32);
+  --color-blob: rgba(70, 136, 212, 0.03);
+}
+
+html[data-theme='dark'] {
+  --color-background: #0f1020;
+  --color-surface: rgba(38, 40, 72, 0.62);
+  --color-surface-solid: #262848;
+  --color-input: rgba(56, 58, 100, 0.88);
+  --color-primary: #6e70e0;
+  --color-primary-dark: #4648d4;
+  --color-primary-soft: rgba(110, 112, 224, 0.48);
+  --color-on-primary: #ffffff;
+  --color-secondary: #00995f;
+  --color-secondary-soft: rgba(0, 153, 94, 0.47);
+  --color-text: #f2f3ff;
+  --color-text-secondary: #b8bad6;
+  --color-text-disabled: #6e708f;
+  --color-border: rgba(110, 112, 224, 0.22);
+  --color-border-glass: rgba(255, 255, 255, 0.52);
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.52);
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 190, 36, 0.57);
+  --color-info: #6e70e0;
+  --color-shadow: rgba(0, 0, 0, 0.5);
+  --color-blob: rgba(110, 112, 224, 0.06);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--color-background);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Superficie glass reutilizable (tokens de theme.ts) */
+.glass-surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-glass);
+  backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-lg);
+}
+
+.glass-solid {
+  background: var(--color-surface-solid);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
