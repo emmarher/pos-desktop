@@ -7,7 +7,7 @@
 
 use serde::Serialize;
 use std::io::{Read, Write};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use tauri::State;
 
 /// Configuración de un puerto serial (parámetros genéricos).
@@ -33,7 +33,7 @@ pub struct SerialPortInfo {
 
 /// Estado del puerto serial abierto (compartido entre comandos).
 pub struct SerialState {
-    pub port: Mutex<Option<serialport::SerialPort>>,
+    pub port: Mutex<Option<Box<dyn serialport::SerialPort>>>,
 }
 
 impl Default for SerialState {
@@ -42,6 +42,15 @@ impl Default for SerialState {
             port: Mutex::new(None),
         }
     }
+}
+
+fn lock_port<'a>(
+    state: &'a State<'_, SerialState>,
+) -> Result<MutexGuard<'a, Option<Box<dyn serialport::SerialPort>>>, String> {
+    state
+        .port
+        .lock()
+        .map_err(|e| format!("puerto serial bloqueado: {e}"))
 }
 
 /// Lista los puertos serial disponibles en el sistema.
@@ -53,7 +62,7 @@ pub fn list_ports() -> Result<Vec<SerialPortInfo>, String> {
         .map(|p| {
             let info = match &p.port_type {
                 serialport::SerialPortType::UsbPort(usb) => Some((
-                    usb.description.clone(),
+                    usb.product.clone(),
                     usb.manufacturer.clone(),
                     usb.product.clone(),
                 )),
@@ -74,7 +83,7 @@ pub fn list_ports() -> Result<Vec<SerialPortInfo>, String> {
 /// Abre un puerto serial con la configuración dada.
 #[tauri::command]
 pub fn open_port(state: State<'_, SerialState>, config: SerialConfig) -> Result<(), String> {
-    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    let mut guard = lock_port(&state)?;
     if guard.is_some() {
         return Err("ya hay un puerto serial abierto".to_string());
     }
@@ -103,7 +112,7 @@ pub fn open_port(state: State<'_, SerialState>, config: SerialConfig) -> Result<
 /// Cierra el puerto serial si estaba abierto.
 #[tauri::command]
 pub fn close_port(state: State<'_, SerialState>) -> Result<(), String> {
-    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    let mut guard = lock_port(&state)?;
     *guard = None;
     Ok(())
 }
@@ -115,7 +124,7 @@ pub fn write_port(state: State<'_, SerialState>, data_base64: String) -> Result<
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data_base64)
         .map_err(|e| format!("base64 inválido: {e}"))?;
-    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    let mut guard = lock_port(&state)?;
     let port = guard.as_mut().ok_or("no hay puerto serial abierto")?;
     port.write_all(&bytes)
         .map_err(|e| format!("error de escritura serial: {e}"))?;
@@ -127,7 +136,7 @@ pub fn write_port(state: State<'_, SerialState>, data_base64: String) -> Result<
 #[tauri::command]
 pub fn read_port(state: State<'_, SerialState>) -> Result<String, String> {
     use base64::Engine as _;
-    let mut guard = state.port.lock().map_err(|e| e.to_string())?;
+    let mut guard = lock_port(&state)?;
     let port = guard.as_mut().ok_or("no hay puerto serial abierto")?;
     let mut buf = [0u8; 4096];
     let mut acc = Vec::new();

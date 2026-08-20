@@ -46,6 +46,7 @@ pub fn build_print_sequence(content: &str, width: usize) -> Vec<u8> {
 }
 
 /// Construye la secuencia de un código de barras CODE128.
+#[allow(dead_code)]
 pub fn build_barcode_sequence(data: &str) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(&[GS, b'h', 50]); // altura 50 dots
@@ -58,6 +59,7 @@ pub fn build_barcode_sequence(data: &str) -> Vec<u8> {
 }
 
 /// Construye la secuencia de un QR (compatible con impresoras que lo soportan).
+#[allow(dead_code)]
 pub fn build_qr_sequence(data: &str) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(&[GS, b'(', b'k', 4, 0, 49, 65, 50, 0]); // modelo 2
@@ -74,6 +76,7 @@ pub fn build_qr_sequence(data: &str) -> Vec<u8> {
 }
 
 /// Secuencia de corte de papel.
+#[allow(dead_code)]
 pub fn cut_sequence() -> Vec<u8> {
     vec![GS, b'V', 66, 0]
 }

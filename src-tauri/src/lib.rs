@@ -20,7 +20,6 @@ mod serial;
 mod udp;
 
 use std::sync::Mutex;
-use tauri::Manager;
 
 /// Estado global compartido entre comandos.
 pub struct AppState {

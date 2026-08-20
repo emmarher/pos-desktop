@@ -12,12 +12,13 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, State};
 
 use crate::printer::build_print_sequence;
-use crate::scale::{parse_frame, ScaleConfig, ScaleReading};
+use crate::scale::{parse_frame, ScaleConfig};
 
 /// Configuración de conexión al servidor (para el orquestador Rust).
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -38,13 +39,13 @@ pub struct HardwareConfig {
 
 /// Tarea de polling activa (evita arrancar dos veces).
 pub struct HardwareState {
-    pub running: Mutex<bool>,
+    pub running: Arc<AtomicBool>,
 }
 
 impl Default for HardwareState {
     fn default() -> Self {
         Self {
-            running: Mutex::new(false),
+            running: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -65,14 +66,8 @@ pub struct ScaleReadingEvent {
 struct PrintJob {
     id: String,
     content: Option<String>,
-    #[serde(default)]
-    retries: u32,
-    #[serde(default)]
-    max_retries: u32,
 }
 
-/// Cliente HTTP mínimo (sin reqwest pesado por request): reutilizamos
-/// reqwest con un client compartido.
 fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
@@ -87,72 +82,69 @@ pub fn start_hardware(
     state: State<'_, HardwareState>,
     config: HardwareConfig,
 ) -> Result<(), String> {
-    let mut running = state.running.lock().map_err(|e| e.to_string())?;
-    if *running {
+    if state.running.load(Ordering::SeqCst) {
         return Err("el orquestador de hardware ya está corriendo".to_string());
     }
-    *running = true;
+    state.running.store(true, Ordering::SeqCst);
 
     let client = http_client()?;
     let app_handle = app.clone();
+    let running_flag = state.running.clone();
     let base_url = format!(
         "http://{}:{}",
         config.server_ip,
         config.server_port.unwrap_or(3000)
     );
 
+    // Clonar la config para moverla al task async.
+    let cfg = config.clone();
+
     tauri::async_runtime::spawn(async move {
-        let mut printer_serial: Option<serialport::SerialPort> = None;
-        let mut scale_serial: Option<serialport::SerialPort> = None;
+        let mut printer_serial: Option<Box<dyn serialport::SerialPort>> = None;
+        let mut scale_serial: Option<Box<dyn serialport::SerialPort>> = None;
         let mut scale_last_weight: Option<f64> = None;
 
-        // Abrir puertos según capacidades (impresora y/o báscula).
-        if config.can_print {
-            if let Some(cfg) = &config.printer_serial {
-                match open_serial(&cfg.port, cfg.baud_rate) {
+        if cfg.can_print {
+            if let Some(sc) = &cfg.printer_serial {
+                match open_serial(&sc.port, sc.baud_rate) {
                     Ok(p) => printer_serial = Some(p),
-                    Err(e) => {
-                        emit_error(&app_handle, "printer", &e);
-                    }
+                    Err(e) => emit_error(&app_handle, "printer", &e),
                 }
             }
         }
-        if config.can_scale {
-            if let Some(cfg) = &config.scale_serial {
-                match open_serial(&cfg.port, cfg.baud_rate.unwrap_or(9600)) {
+        if cfg.can_scale {
+            if let Some(sc) = &cfg.scale_serial {
+                match open_serial(&sc.port, sc.baud_rate) {
                     Ok(p) => scale_serial = Some(p),
-                    Err(e) => {
-                        emit_error(&app_handle, "scale", &e);
-                    }
+                    Err(e) => emit_error(&app_handle, "scale", &e),
                 }
             }
         }
 
-        // Bucle principal: polling de impresión + lectura de báscula.
         loop {
-            let still_running = {
-                let r = state.running.lock().unwrap();
-                *r
-            };
-            if !still_running {
+            if !running_flag.load(Ordering::SeqCst) {
                 break;
             }
 
-            // 1) Impresión delegada (RF-IM-002)
-            if config.can_print && printer_serial.is_some() {
+            if cfg.can_print {
                 if let Some(port) = printer_serial.as_mut() {
-                    match poll_print_jobs(&client, &base_url, &config, port).await {
+                    match poll_print_jobs(&client, &base_url, &cfg, port, &app_handle).await {
                         Ok(()) => {}
                         Err(e) => emit_error(&app_handle, "printer", &e),
                     }
                 }
             }
 
-            // 2) Báscula: leer bytes y parsear
-            if config.can_scale {
+            if cfg.can_scale {
                 if let Some(port) = scale_serial.as_mut() {
-                    if let Some(cfg) = &config.scale_serial {
-                        read_scale(port, cfg, config.device_id.clone(), &mut scale_last_weight, &app_handle);
+                    if let Some(sc) = &cfg.scale_serial {
+                        read_scale(
+                            port,
+                            sc,
+                            cfg.device_id.clone(),
+                            &mut scale_last_weight,
+                            &app_handle,
+                        );
                     }
                 }
             }
@@ -167,12 +159,14 @@ pub fn start_hardware(
 /// Detiene el orquestador de hardware.
 #[tauri::command]
 pub fn stop_hardware(state: State<'_, HardwareState>) -> Result<(), String> {
-    let mut running = state.running.lock().map_err(|e| e.to_string())?;
-    *running = false;
+    state.running.store(false, Ordering::SeqCst);
     Ok(())
 }
 
-fn open_serial(port: &str, baud: Option<u32>) -> Result<serialport::SerialPort, String> {
+fn open_serial(
+    port: &str,
+    baud: Option<u32>,
+) -> Result<Box<dyn serialport::SerialPort>, String> {
     serialport::new(port, baud.unwrap_or(9600))
         .open()
         .map_err(|e| format!("no se pudo abrir {port}: {e}"))
@@ -183,8 +177,11 @@ async fn poll_print_jobs(
     client: &reqwest::Client,
     base_url: &str,
     config: &HardwareConfig,
-    port: &mut serialport::SerialPort,
+    port: &mut Box<dyn serialport::SerialPort>,
+    app: &AppHandle,
 ) -> Result<(), String> {
+    use std::io::Write;
+
     let url = format!(
         "{base_url}/print-jobs?target_device_id={}&status=PENDING",
         config.device_id
@@ -201,7 +198,6 @@ async fn poll_print_jobs(
         return Ok(()); // servidor no accesible → reintentar en el siguiente ciclo
     }
 
-    // El servidor responde { data: [...] } (envoltorio de pos-server).
     #[derive(Deserialize)]
     struct Envelope {
         data: Option<Vec<PrintJob>>,
@@ -228,22 +224,22 @@ async fn poll_print_jobs(
             patch = patch.header("Authorization", format!("Bearer {token}"));
         }
         if let Err(e) = patch.send().await {
-            emit_error_handle(config, &e);
+            emit_error(app, "printer", &format!("PATCH /print-jobs falló: {e}"));
         }
-        let _ = job.retries;
     }
     Ok(())
 }
 
-/// Lee bytes de la báscula, parsea y emite + (futuro) heartbeat.
+/// Lee bytes de la báscula, parsea y emite a la UI.
 fn read_scale(
-    port: &mut serialport::SerialPort,
+    port: &mut Box<dyn serialport::SerialPort>,
     cfg: &ScaleConfig,
     device_id: String,
     last_weight: &mut Option<f64>,
     app: &AppHandle,
 ) {
     use std::io::Read;
+
     let mut buf = [0u8; 128];
     let mut text = String::new();
     loop {
@@ -268,9 +264,7 @@ fn read_scale(
             stable,
             at: Utc::now().to_rfc3339(),
         };
-        // Enviar a la UI (la UI lo muestra en vivo).
         let _ = app.emit("scale-reading", event.clone());
-        // TODO Fase 6: POST /scale/current (heartbeat) con el access_token.
         let _ = &event;
     }
 }
@@ -280,11 +274,6 @@ fn emit_error(app: &AppHandle, source: &str, msg: &str) {
         "hardware-error",
         serde_json::json!({ "source": source, "message": msg }),
     );
-}
-
-fn emit_error_handle(config: &HardwareConfig, msg: &str) {
-    let _ = &config;
-    let _ = msg;
 }
 
 #[cfg(test)]
