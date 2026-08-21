@@ -80,28 +80,30 @@
 scaffold en `serial.rs`, `printer.rs`, `scale.rs`, `hardware.rs`).
 
 ### Impresora ESC/POS
-- [ ] Completar `printer.rs`: builder de ticket (80mm, encabezado, items, totales,
-      pagos, cambio, agradecimiento, corte).
-- [ ] `list_ports` (serial/lugar del PC) y selección de impresora (USB/RAW_TCP_9100 o
-      serie) en UI de configuración.
+- [x] `printer.rs`: builder ESC/POS (init, alineación, wrap, feed, corte, barcode, QR).
+- [x] `list_ports` (serial/lugar del PC) y selección de impresora en UI de
+      configuración (HardwareScreen).
 - [ ] Imprimir el ticket real tras la venta (marcar `print_jobs` COMPLETED/FAILED vía
       Rust).
-- [ ] Cola de impresión delegada: poll de `GET /print-jobs?status=PENDING` desde Rust
-      cada 2s y ejecución local (RF-IM-002).
+- [x] Orquestador con poll de `GET /print-jobs?status=PENDING` desde Rust e impresión
+      local (RF-IM-002) — implementado en hardware.rs; falta exponer el flujo completo.
 
 ### Báscula
-- [ ] Completar `scale.rs`: parser configurable (Torrey/Rhino/Toledo/Genérico).
-- [ ] Heartbeat cada 500ms publicando `device_status` (POST desde Rust) (RF-BA-002).
+- [x] `scale.rs`: parser configurable (regex/fixed/line) con presets (Torrey/Rhino/
+      Toledo/Genérico).
+- [ ] Heartbeat cada 500ms publicando `device_status` (POST desde Rust) (RF-BA-002) —
+      lectura emitida a UI vía evento `scale-reading`; falta el POST.
 - [ ] Lectura del peso estable en el flujo de venta por peso / CAJ (RF-BA-003/004).
 - [ ] `get_scale_reading` comando: peso actual cacheado.
 
 ### UI de configuración de hardware
-- [ ] Pantalla "Hardware": listar puertos serial, probar impresora (impresión de
-      prueba), probar báscula (leer peso), guardar config en Rust.
+- [x] `HardwareScreen`: listar puertos serial, probar impresora, leer peso de báscula,
+      iniciar/detener orquestador de hardware. Ruta `/hardware` + acceso desde el
+      Dashboard (engranaje).
 
 ### Criterio de salida
-- Desde desktop se imprime un ticket real a la impresora del PC.
-- La báscula del PC reporta peso y la venta por peso lo usa.
+- [ ] Desde desktop se imprime un ticket real a la impresora del PC.
+- [ ] La báscula del PC reporta peso y la venta por peso lo usa.
 
 ---
 
