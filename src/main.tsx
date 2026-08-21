@@ -10,11 +10,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/main.css';
 
-// Aplicar tema inicial antes de pintar (sin flash).
-const mode = window.matchMedia('(prefers-color-scheme: dark)').matches
-  ? 'dark'
-  : 'light';
-document.documentElement.setAttribute('data-theme', mode);
+// Tema por defecto: LIGHT (la paleta clara es la estándar de la app).
+document.documentElement.setAttribute('data-theme', 'light');
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

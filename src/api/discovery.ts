@@ -8,6 +8,7 @@
  *   - Storage vía lib/storage (localStorage).
  */
 import {invoke} from '@tauri-apps/api/core';
+import {syncServerToRust} from './client';
 
 import AsyncStorage from '../lib/storage';
 import {
@@ -129,6 +130,8 @@ export function parseQrPairing(url: string): DiscoveredServer | null {
 export async function applyServer(server: DiscoveredServer): Promise<void> {
   await AsyncStorage.setItem(STORAGE_SERVER_IP, server.ip);
   await AsyncStorage.setItem(STORAGE_SERVER_PORT, String(server.port));
+  // Fijar el servidor en Rust (para que api_request salga de ahí).
+  await syncServerToRust(server.ip, server.port ?? 3000);
   const store = useServerStore.getState();
   store.resetFailures();
   store.setServer(server);

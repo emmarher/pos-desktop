@@ -9,6 +9,7 @@ import {useNavigate} from 'react-router-dom';
 import {useTheme} from '../hooks/useTheme';
 import {useServerStore} from '../stores/server.store';
 import {discoverServer, applyServer} from '../api/discovery';
+import {syncServerToRust} from '../api/client';
 import {useAuthStore} from '../stores/auth.store';
 import POSButton from '../components/POSButton';
 import GlassBackground from '../components/GlassBackground';
@@ -35,6 +36,8 @@ export default function ConnectionScreen() {
       resetFailures();
       store.setServer({ip: found.ip, port: found.port ?? 3000});
       store.setStatus('connected');
+      // Fijar el servidor en Rust para las peticiones HTTP (seguridad).
+      await syncServerToRust(found.ip, found.port ?? 3000);
       navigate('/login', {state: {tenantCode: found.tenantCode}});
     }
   }, [navigate]);

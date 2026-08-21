@@ -2,17 +2,22 @@
 //!
 //! Comandos Tauri expuestos al frontend:
 //!   - udp_discover     → discovery del servidor (RF-DS-001)
+//!   - api_set_server / api_set_token / api_request
+//!                        → cliente HTTP del POS en Rust (seguridad:
+//!                          el webview NUNCA hace fetch al backend)
 //!   - list_ports / open_port / close_port / write_port / read_port
 //!                        → capa serial genérica (RF-IM / RF-BA)
 //!   - start_hardware / stop_hardware → orquestador de impresión + báscula
 //!
 //! Módulos:
+//!   - api.rs     cliente HTTP (reqwest) con token en Rust
 //!   - udp.rs     protocolo UDP de discovery
 //!   - serial.rs  capa serial genérica
 //!   - printer.rs builder ESC/POS
 //!   - scale.rs   parser de báscula configurable
 //!   - hardware.rs orquestador delegado (poll print-jobs + báscula)
 
+mod api;
 mod hardware;
 mod printer;
 mod scale;
@@ -63,8 +68,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .manage(HardwareSettings::default())
+        .manage(api::ApiState::default())
         .invoke_handler(tauri::generate_handler![
             udp_discover,
+            api::api_set_server,
+            api::api_set_token,
+            api::api_request,
             serial::list_ports,
             serial::open_port,
             serial::close_port,

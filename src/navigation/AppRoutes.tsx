@@ -5,14 +5,13 @@
  *   - Licencia vencida  → bloqueo total.
  *   - Sesión activa     → dashboard + recibo.
  *   - Sin sesión        → conexión → login.
- *
- * Las pantallas reales se portan en F4; mientras tanto se usan placeholders
- * ligeros para mantener el arranque y el splash verificado.
  */
 import {Routes, Route, Navigate} from 'react-router-dom';
 import {useAuthStore} from '../stores/auth.store';
+import ConnectionScreen from '../screens/ConnectionScreen';
+import LoginScreen from '../screens/LoginScreen';
 
-/* ── Placeholders temporales (se reemplazan en F4) ────────────────────── */
+/* ── Placeholder temporal (se reemplazan en F4 las pantallas restantes) ── */
 function Placeholder({title}: {title: string}) {
   return (
     <div className="flex h-full w-full items-center justify-center bg-[var(--color-background)]">
@@ -48,11 +47,11 @@ export default function AppRoutes() {
     );
   }
 
-  // Sin sesión: arranque de conexión → login.
+  // Sin sesión: arranque de conexión UDP → login (manual/IP).
   return (
     <Routes>
-      <Route path="/" element={<Placeholder title="Conectar servidor" />} />
-      <Route path="/login" element={<Placeholder title="Iniciar sesión" />} />
+      <Route path="/" element={<ConnectionScreen />} />
+      <Route path="/login" element={<LoginScreen />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
