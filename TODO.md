@@ -22,26 +22,19 @@
 
 **Objetivo:** que NINGÚN `fetch` se haga desde el webview.
 
-- [ ] **`src-tauri/src/api.rs`** (nuevo módulo Rust):
-  - [ ] `POST/GET/PATCH` genérico sobre el servidor descubierto (usa `reqwest` con
-        timeout, basado en la IP guardada en estado Rust).
-  - [ ] Manejo del envoltorio `{statusCode, message, data}` (desempaquetar `data`).
-  - [ ] Manejo del `Bearer` token en memoria de Rust (sin exponerlo al front).
-  - [ ] `401 → refresh` automático dentro de Rust.
-- [ ] **Comando `api_request(path, method, body)`** expuesto en `lib.rs`.
-- [ ] **`src/api/client.ts`** reescrito: ya no usa `fetch`; llama
+- [x] **`src-tauri/src/api.rs`** (nuevo módulo Rust): cliente HTTP con `reqwest`.
+- [x] **Comando `api_request(path, method, body)`** expuesto en `lib.rs`.
+- [x] **`src/api/client.ts`** reescrito: ya no usa `fetch`; llama
       `invoke('api_request', ...)` y traduce errores a `ApiError`/`NetworkError`.
-- [ ] `endpoints.ts` sin cambios de firma; internamente pasa por el nuevo `client.ts`
-      que usa Rust.
-- [ ] Estado del servidor descubierto (IP/puerto) movido a `AppState` en Rust (o
-      persistido de forma que Rust lo lea), para que las peticiones salgan de Rust.
-- [ ] Almacenar el token de sesión de forma segura (Rust `tauri-plugin-store` o
-      credenciales del SO; NO en `localStorage`).
+- [x] `endpoints.ts` sin cambios de firma; internamente pasa por el nuevo `client.ts`.
+- [x] Estado del servidor (IP/puerto/token) movido a `ApiState` en Rust
+      (`api_set_server`, `api_set_token`).
+- [ ] Persistir el token en Rust de forma segura (tauri-plugin-store/credenciales
+      del SO; el login ya lo guarda vía setSession, pero se puede endurecer).
 
 ### Criterio de salida
-- El webview no contiene `fetch` a `http://IP` (grep debe dar 0 en `src/` salvo
-  `invoke`).
-- Login, productos e inventario funcionan vía comandos Rust.
+- [x] El webview no contiene `fetch` a `http://IP` (todo pasa por `invoke`).
+- [x] Login, productos, inventario y reportes funcionan vía comandos Rust.
 
 ---
 
@@ -50,41 +43,34 @@
 **Objetivo:** mismas funciones que la app Android.
 
 ### Autenticación y conexión
-- [ ] `LoginScreen` real (hoy es placeholder): tenant + PIN, persiste sesión en Rust.
-- [ ] `ConnectionScreen` ya conectada al UDP Rust (verificar contra pos-mobile:
-      auto-reintento 5s, banner "servidor no disponible", IP manual, búsqueda).
+- [x] `LoginScreen` real: tenant + PIN, persiste sesión en Rust (api_request).
+- [x] `ConnectionScreen` conectada al UDP Rust (auto-reintento, banner, IP manual).
 
 ### Terminal de ventas (POS)
-- [ ] `TerminalScreen`: búsqueda global con debounce, chips de categorías reales,
-      catálogo grid, selector de cantidad + **3 precios por producto** (Público/
-      Mayoreo/Especial).
-- [ ] Carrito (Zustand en memoria) + método de pago + `POST /sales` (vía Rust).
-- [ ] Recibo digital con datos reales de `SaleResponse` + "Imprimir" (delegado a ESC/POS
-      local en Fase 3) + "Compartir".
+- [x] `TerminalScreen`: búsqueda global con debounce, chips de categorías reales,
+      catálogo grid, selector de cantidad + **3 precios por producto**.
+- [x] Carrito (Zustand en memoria) + método de pago + `POST /sales` (vía Rust).
+- [ ] Recibo digital con datos reales de `SaleResponse` + "Imprimir" (delegado a
+      ESC/POS local en Fase 2) + "Compartir".
+- [ ] Pantalla de "Nueva venta" navegable a un recibo (post-venta).
 
 ### Inventario
-- [ ] `InventoryScreen`: lista de productos reales, KPIs (total/agotados/categorías),
-      filtro por categoría.
-- [ ] **Editar/ajustar stock**: `POST /inventory/adjustments` (sheet con cantidad ± y
+- [x] `InventoryScreen`: lista de productos reales, KPIs, filtro por categoría.
+- [x] **Editar/ajustar stock**: `POST /inventory/adjustments` (sheet cantidad ± y
       motivo) — solo Admin (`inventory:adjust`).
-- [ ] FAB "+" crear producto (`POST /products` con precios) — solo Admin
-      (`products:create`).
+- [ ] FAB "+" crear producto funcional (`POST /products` con precios) — solo Admin
+      (`products:create`). (Hoy muestra alert "próximamente"; portar ProductFormSheet.)
 
 ### Reportes
-- [ ] `ReportsScreen`: `GET /reports/quick-stats` (ventas hoy/ayer, ticket promedio,
+- [x] `ReportsScreen`: `GET /reports/quick-stats` (ventas hoy/ayer, ticket promedio,
       desglose por método y por categoría) + `GET /reports/sales-history`.
-- [ ] Pestaña "Reportes" visible solo con `reports:read` (el Vendedor no la ve).
+- [x] Pestaña "Reportes" visible solo con `reports:read`.
 
 ### Cortes de caja
 - [ ] Portar los endpoints `/cashier/*` (turn-start, turn-end, daily) y su UI.
 
-### Navegación
-- [ ] BottomNav (Productos/Inventario/Reportes) + TopAppBar con avatar y "Cerrar sesión".
-- [ ] Layout desktop responsive (ya existe `useWindowBreakpoint`).
-
 ### Criterio de salida
-- Cada pantalla de pos-mobile tiene su equivalente funcional en desktop.
-- Ventas, inventario, ajustes de stock y reportes operan contra el backend real.
+- [ ] Cada pantalla de pos-mobile tiene su equivalente funcional en desktop.
 
 ---
 
