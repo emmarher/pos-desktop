@@ -141,6 +141,43 @@ export function adjustInventory(input: AdjustStockInput): Promise<unknown> {
   });
 }
 
+/* ──────────────────────────────────────────────────────────────────────
+ * REPORTES (RF-PR) — solo con permiso reports:read
+ * ────────────────────────────────────────────────────────────────────── */
+
+/** Estadísticas rápidas (GET /reports/quick-stats). */
+export interface QuickStats {
+  today: { total_sales: number; transactions: number; average_ticket: number };
+  yesterday: { total_sales: number; transactions: number };
+  by_payment_method: { method: string; total: number; count: number }[];
+  by_category: { category_id: string | null; category_name: string | null; total: number }[];
+}
+
+export function getQuickStats(): Promise<QuickStats> {
+  return apiRequest<QuickStats>('/reports/quick-stats');
+}
+
+/** Venta del historial (GET /reports/sales-history). */
+export interface SaleHistoryItem {
+  id: string;
+  folio: string;
+  seller_id: string | null;
+  seller_name: string | null;
+  customer_name: string | null;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  payment_state: string;
+  created_at: string;
+}
+
+export function getSalesHistory(): Promise<{ items: SaleHistoryItem[]; total: number }> {
+  return apiRequest<{ items: SaleHistoryItem[]; total: number }>(
+    '/reports/sales-history?limit=20',
+  );
+}
+
 /** GET /measurement-units — unidades de medida del catálogo (RF-UM). */
 export function getMeasurementUnits(): Promise<MeasurementUnit[]> {
   return apiRequest<MeasurementUnit[]>('/measurement-units');
