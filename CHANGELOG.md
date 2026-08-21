@@ -11,6 +11,13 @@ Este proyecto usa [Semantic Versioning](https://semver.org/).
 - Proyecto Tauri v2 (Rust + React/TS) en `pos-desktop/`.
 - Documentación base: `README.md`, `CHANGELOG.md`, `AGENTS.md` y skill opencode `pos-desktop`.
 
+### Corregido
+- **UI Components**: Resueltos errores de compilación TypeScript en `POSButton`, `GlassBackground`, `GlassSurface` y `ConnectionScreen`.
+  - `POSButton`: extendido `ButtonHTMLAttributes`, añadido `data-testid`, eliminado import `React` innecesario.
+  - `GlassBackground`/`GlassSurface`: aceptan `className` y `style` via `HTMLAttributes` spread.
+  - `ConnectionScreen`: eliminados destructurados sin usar, tipado correcto en `onInput`, selector `lastError` añadido.
+- Build Vite y `tsc --noEmit` pasan sin errores.
+
 ### Planificado
 - Scaffold Tauri (src-tauri, capabilities, vite).
 - Porte de núcleo: models, constants, stores y api desde `pos-mobil`.
