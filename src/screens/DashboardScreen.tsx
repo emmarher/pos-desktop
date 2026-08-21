@@ -6,6 +6,7 @@
  */
 import {useState} from 'react';
 import {useNavigate} from 'react-router-dom';
+import {Settings} from 'lucide-react';
 import type {NavTab} from '../components/BottomNavBar';
 import PosTerminalScreen from './PosTerminalScreen';
 import InventoryScreen from './InventoryScreen';
@@ -32,34 +33,54 @@ export default function DashboardScreen() {
     }
   };
 
+  // Botón de configuración de hardware (superpone al contenido).
+  const hardwareButton = (
+    <button
+      className="absolute right-4 top-[4.5rem] z-20 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-secondary)] shadow-[0_4px_12px_var(--color-shadow)] transition-colors hover:text-[var(--color-primary)]"
+      onClick={() => navigate('/hardware')}
+      title="Configuración de hardware (impresora/báscula)"
+    >
+      <Settings size={20} />
+    </button>
+  );
+
   if (effectiveTab === 'reportes') {
     return (
-      <ReportsScreen
-        activeTab={effectiveTab}
-        onTabChange={setTab}
-        onAvatarPress={handleAvatarPress}
-        visibleTabs={visibleTabs}
-      />
+      <>
+        <ReportsScreen
+          activeTab={effectiveTab}
+          onTabChange={setTab}
+          onAvatarPress={handleAvatarPress}
+          visibleTabs={visibleTabs}
+        />
+        {hardwareButton}
+      </>
     );
   }
 
   if (effectiveTab === 'inventario') {
     return (
-      <InventoryScreen
+      <>
+        <InventoryScreen
+          activeTab={effectiveTab}
+          onTabChange={setTab}
+          onAvatarPress={handleAvatarPress}
+          visibleTabs={visibleTabs}
+        />
+        {hardwareButton}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PosTerminalScreen
         activeTab={effectiveTab}
         onTabChange={setTab}
         onAvatarPress={handleAvatarPress}
         visibleTabs={visibleTabs}
       />
-    );
-  }
-
-  return (
-    <PosTerminalScreen
-      activeTab={effectiveTab}
-      onTabChange={setTab}
-      onAvatarPress={handleAvatarPress}
-      visibleTabs={visibleTabs}
-    />
+      {hardwareButton}
+    </>
   );
 }

@@ -11,6 +11,7 @@ import {useAuthStore} from '../stores/auth.store';
 import ConnectionScreen from '../screens/ConnectionScreen';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
+import HardwareScreen from '../screens/HardwareScreen';
 
 /* ── Placeholder temporal (se reemplazan en F4 las pantallas restantes) ── */
 function Placeholder({title}: {title: string}) {
@@ -42,6 +43,7 @@ export default function AppRoutes() {
     return (
       <Routes>
         <Route path="/" element={<DashboardScreen />} />
+        <Route path="/hardware" element={<HardwareScreen />} />
         <Route path="/receipt/:saleId" element={<Placeholder title="Recibo" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
