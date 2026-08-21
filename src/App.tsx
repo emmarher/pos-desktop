@@ -20,14 +20,27 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    let minDelayMet = false;
+    const start = Date.now();
+    
     (async () => {
       try {
         await restoreSession();
       } catch {
         /* fallo de arranque: se ignora y se va a la pantalla de conexión */
       }
+      
+      // Garantizar mínimo 3 segundos de splash
+      const elapsed = Date.now() - start;
+      const remaining = Math.max(0, 3000 - elapsed);
+      
       if (!cancelled) {
-        setBooting(false);
+        setTimeout(() => {
+          if (!cancelled && !minDelayMet) {
+            minDelayMet = true;
+            setBooting(false);
+          }
+        }, remaining);
       }
     })();
     return () => {
