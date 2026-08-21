@@ -5,6 +5,58 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-08-21 — Fase 0 (HTTP→Rust) + Fase 1 (paridad de pantallas)
+
+### Añadido
+
+- **Fase 0 — Capa HTTP en Rust (seguridad)**: las peticiones al backend ya NO salen
+  del webview. Nuevo módulo `src-tauri/src/api.rs` con `reqwest`: comandos
+  `api_set_server`, `api_set_token` y `api_request`. El token de sesión y la IP/puerto
+  viven en `ApiState` de Rust (el JWT no circula por el DOM).
+- **Tema púrpura/rosa** en `theme.ts` y `main.css`, con **tema LIGHT por defecto**
+  (main.tsx y useTheme.ts sin depender de `prefers-color-scheme`).
+- **`ConnectionScreen` conectada al UDP Rust**: discovery automático
+  (`POS_DISCOVER`), auto-reintento, banner "servidor no disponible", conexión manual
+  (IP + puerto) y QR.
+- **`LoginScreen` real**: tenant + PIN, `POST /auth/login` vía Rust, ID de dispositivo
+  estable (RF-AU-004), "¿Cambiar servidor?".
+- **`PosTerminalScreen` (Terminal/POS)**: búsqueda global, categorías reales, catálogo
+  grid responsive, sheet de producto con selector de **3 precios** (Público/Mayoreo/
+  Especial), carrito con método de pago y `POST /sales`.
+- **`InventoryScreen`**: lista real del backend, KPIs (total/agotados/categorías),
+  filtro por categoría, **ajustar stock** (cantidad ± y motivo) solo Admin.
+- **`ReportsScreen`**: `GET /reports/quick-stats` (ventas hoy/ayer, ticket promedio,
+  desglose por método y por categoría) + `GET /reports/sales-history`. Visible solo con
+  `reports:read`.
+- **Componentes portados** a React DOM/Tailwind: `BottomNavBar`, `TopAppBar`,
+  `SearchInput`, `FilterChip`, `ProductCard`, `ProductSheet`, `CartSheet`, `Fab`,
+  `KpiCard`, `StatusChip`, `AdjustStockSheet`.
+- Helper `constants/prices.ts` (`getProductPrices`).
+- `TODO.md` con el roadmap y seguimiento de fases.
+
+### Corregido
+
+- `client.ts` reescrito para invocar `api_request` de Rust (eliminado `fetch` del
+  webview); conserva `ApiError`/`NetworkError` y el refresh en 401.
+- `discovery.ts` y `ConnectionScreen` sincronizan el servidor descubierto a Rust
+  (`syncServerToRust`).
+- Errores de tipos en los componentes portados (iconos lucide, placeholder RN→HTML).
+
+### Verificado
+
+- `cargo check` (Rust) y `tsc --noEmit` en 0 errores.
+- `npm run build` (Vite) compila los assets.
+
+### Pendiente
+
+- **Recibo digital** post-venta + "Imprimir" (puente a ESC/POS de la Fase 2).
+- **FAB "+" crear producto** funcional (`POST /products` con precios).
+- **Cortes de caja** (`/cashier/*`).
+- **Fase 2 — Comunicación serial**: completar impresora ESC/POS y báscula en Rust,
+  poll de `/print-jobs` desde Rust, UI de configuración de hardware.
+- **Fase 3** — Sync command-based y QoS.
+- **Fase 4** — Empaquetado MSI/NSIS.
+
 ## [Sin publicar]
 
 ### Añadido
