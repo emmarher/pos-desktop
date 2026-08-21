@@ -121,6 +121,26 @@ export function createProduct(input: CreateProductInput): Promise<Product> {
   return apiRequest<Product>('/products', {method: 'POST', body: input});
 }
 
+/* ──────────────────────────────────────────────────────────────────────
+ * INVENTARIO — ajuste de stock (RF-IN-005, permiso inventory:adjust)
+ * ────────────────────────────────────────────────────────────────────── */
+
+/** Body de POST /inventory/adjustments. quantity: +entrada / −salida. */
+export interface AdjustStockInput {
+  product_id: string;
+  quantity: number;
+  reason: string;
+  location_id?: string | null;
+}
+
+/** POST /inventory/adjustments — ajusta stock con motivo (Admin). */
+export function adjustInventory(input: AdjustStockInput): Promise<unknown> {
+  return apiRequest<unknown>('/inventory/adjustments', {
+    method: 'POST',
+    body: input,
+  });
+}
+
 /** GET /measurement-units — unidades de medida del catálogo (RF-UM). */
 export function getMeasurementUnits(): Promise<MeasurementUnit[]> {
   return apiRequest<MeasurementUnit[]>('/measurement-units');
