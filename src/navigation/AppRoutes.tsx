@@ -10,6 +10,7 @@ import {Routes, Route, Navigate} from 'react-router-dom';
 import {useAuthStore} from '../stores/auth.store';
 import ConnectionScreen from '../screens/ConnectionScreen';
 import LoginScreen from '../screens/LoginScreen';
+import DashboardScreen from '../screens/DashboardScreen';
 
 /* ── Placeholder temporal (se reemplazan en F4 las pantallas restantes) ── */
 function Placeholder({title}: {title: string}) {
@@ -40,7 +41,7 @@ export default function AppRoutes() {
   if (isAuthenticated) {
     return (
       <Routes>
-        <Route path="/" element={<Placeholder title="Dashboard" />} />
+        <Route path="/" element={<DashboardScreen />} />
         <Route path="/receipt/:saleId" element={<Placeholder title="Recibo" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
