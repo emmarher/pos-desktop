@@ -56,6 +56,15 @@ Este proyecto usa [Semantic Versioning](https://semver.org/).
 - **`ReportsScreen`**: `GET /reports/quick-stats` (ventas hoy/ayer, ticket promedio,
   desglose por método y por categoría) + `GET /reports/sales-history`. Visible solo con
   `reports:read`.
+- **CRUD completo de productos** en Inventario: crear (POST /products), editar (PATCH
+  /products/:id), eliminar (borrado lógico, DELETE /products/:id) — cada acción gated
+  por permisos `products:create/update/delete` del JWT. `ProductFormSheet` portado con
+  categoría, unidades, precio/costo, stock mínimo, 3 precios por tipo y flags
+  báscula/fraccional.
+- **Menú de usuario en el avatar** (TopAppBar): dropdown con nombre, rol, tenant y estado
+  de licencia + botón "Cerrar sesión".
+- **Visibilidad de errores de carga**: Inventario y Terminal muestran el error real de la
+  API (red, 401, licencia, permiso) con botón **Reintentar** en lugar de lista vacía muda.
 - **Componentes portados** a React DOM/Tailwind: `BottomNavBar`, `TopAppBar`,
   `SearchInput`, `FilterChip`, `ProductCard`, `ProductSheet`, `CartSheet`, `Fab`,
   `KpiCard`, `StatusChip`, `AdjustStockSheet`.

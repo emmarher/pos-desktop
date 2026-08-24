@@ -26,11 +26,9 @@ export default function DashboardScreen() {
 
   const effectiveTab: NavTab = visibleTabs.includes(tab) ? tab : 'caja';
 
-  const handleAvatarPress = () => {
-    if (window.confirm('¿Deseas cerrar la sesión actual?')) {
-      void logout();
-      navigate('/', {replace: true});
-    }
+  const handleLogout = () => {
+    void logout();
+    navigate('/', {replace: true});
   };
 
   // Botón de configuración de hardware (superpone al contenido).
@@ -50,7 +48,7 @@ export default function DashboardScreen() {
         <ReportsScreen
           activeTab={effectiveTab}
           onTabChange={setTab}
-          onAvatarPress={handleAvatarPress}
+          onLogout={handleLogout}
           visibleTabs={visibleTabs}
         />
         {hardwareButton}
@@ -64,7 +62,7 @@ export default function DashboardScreen() {
         <InventoryScreen
           activeTab={effectiveTab}
           onTabChange={setTab}
-          onAvatarPress={handleAvatarPress}
+          onLogout={handleLogout}
           visibleTabs={visibleTabs}
         />
         {hardwareButton}
@@ -77,7 +75,7 @@ export default function DashboardScreen() {
       <PosTerminalScreen
         activeTab={effectiveTab}
         onTabChange={setTab}
-        onAvatarPress={handleAvatarPress}
+        onLogout={handleLogout}
         visibleTabs={visibleTabs}
       />
       {hardwareButton}

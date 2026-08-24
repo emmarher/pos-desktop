@@ -30,14 +30,14 @@ const fmt = (n: number) =>
 interface ReportsScreenProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
-  onAvatarPress?: () => void;
+  onLogout?: () => void;
   visibleTabs?: NavTab[];
 }
 
 export default function ReportsScreen({
   activeTab,
   onTabChange,
-  onAvatarPress,
+  onLogout,
   visibleTabs,
 }: ReportsScreenProps) {
   const [stats, setStats] = useState<QuickStats | null>(null);
@@ -66,7 +66,7 @@ export default function ReportsScreen({
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
-      <TopAppBar title="Reportes" onAvatarPress={onAvatarPress} />
+      <TopAppBar title="Reportes" onLogout={onLogout} />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-24">
         {loading ? (

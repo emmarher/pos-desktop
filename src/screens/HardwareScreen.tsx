@@ -26,6 +26,7 @@ export default function HardwareScreen() {
   const server = useServerStore(s => s.server);
   const user = useAuthStore(s => s.user);
   const deviceId = user?.id ?? 'pc-pos';
+  const logout = useAuthStore(s => s.logout);
 
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [selectedPrinter, setSelectedPrinter] = useState('');
@@ -116,7 +117,13 @@ export default function HardwareScreen() {
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
-      <TopAppBar title="Hardware" onAvatarPress={() => navigate('/')} />
+      <TopAppBar
+        title="Hardware"
+        onLogout={() => {
+          void logout();
+          navigate('/', {replace: true});
+        }}
+      />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         <GlassSurface className="p-4">

@@ -121,6 +121,29 @@ export function createProduct(input: CreateProductInput): Promise<Product> {
   return apiRequest<Product>('/products', {method: 'POST', body: input});
 }
 
+/** GET /products/:id — detalle con precios (permiso products:read). */
+export function getProduct(id: string): Promise<Product> {
+  return apiRequest<Product>(`/products/${encodeURIComponent(id)}`);
+}
+
+/** PATCH /products/:id — actualiza producto (permiso products:update). */
+export function updateProduct(
+  id: string,
+  input: Partial<CreateProductInput>,
+): Promise<Product> {
+  return apiRequest<Product>(`/products/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
+/** DELETE /products/:id — borrado lógico (permiso products:delete). */
+export function deleteProduct(id: string): Promise<Product> {
+  return apiRequest<Product>(`/products/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
 /* ──────────────────────────────────────────────────────────────────────
  * INVENTARIO — ajuste de stock (RF-IN-005, permiso inventory:adjust)
  * ────────────────────────────────────────────────────────────────────── */

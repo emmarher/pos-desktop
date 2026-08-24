@@ -8,6 +8,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import type {Category, PriceType, Product} from '../models';
 import {searchProducts, getCategories, getPriceTypes} from '../api/endpoints';
+import {ApiError} from '../api/client';
 import {useCartStore} from '../stores/cart.store';
 import {useAuthStore} from '../stores/auth.store';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
@@ -22,14 +23,14 @@ import Fab from '../components/Fab';
 interface PosTerminalScreenProps {
   activeTab: NavTab;
   onTabChange: (tab: NavTab) => void;
-  onAvatarPress?: () => void;
+  onLogout?: () => void;
   visibleTabs?: NavTab[];
 }
 
 export default function PosTerminalScreen({
   activeTab,
   onTabChange,
-  onAvatarPress,
+  onLogout,
   visibleTabs,
 }: PosTerminalScreenProps) {
   const [query, setQuery] = useState('');
@@ -41,19 +42,28 @@ export default function PosTerminalScreen({
   const [categories, setCategories] = useState<Category[]>([]);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const cartCount = useCartStore(s => s.items.length);
   const user = useAuthStore(s => s.user);
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
-    const prodRes = await searchProducts({limit: 50}).catch(() => null);
-    const cats = await getCategories().catch(() => null);
-    const pts = await getPriceTypes().catch(() => null);
-    if (prodRes && prodRes.items.length > 0) setProducts(prodRes.items);
-    if (cats && cats.length > 0) setCategories(cats);
-    if (pts && pts.length > 0) setPriceTypes(pts);
-    setLoading(false);
+    setError(null);
+    try {
+      const [prodRes, cats, pts] = await Promise.all([
+        searchProducts({limit: 50}),
+        getCategories(),
+        getPriceTypes(),
+      ]);
+      if (prodRes.items.length > 0) setProducts(prodRes.items);
+      if (cats.length > 0) setCategories(cats);
+      if (pts.length > 0) setPriceTypes(pts);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -75,7 +85,7 @@ export default function PosTerminalScreen({
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
-      <TopAppBar title="Terminal de ventas" onAvatarPress={onAvatarPress} />
+      <TopAppBar title="Terminal de ventas" onLogout={onLogout} />
 
       {/* Búsqueda + categorías */}
       <div className="px-4 pt-3">
@@ -100,6 +110,16 @@ export default function PosTerminalScreen({
             <span className="text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
               Cargando productos…
             </span>
+          </div>
+        ) : error && products.length === 0 ? (
+          <div className="glass-surface mx-auto mt-12 max-w-sm rounded-lg p-6 text-center">
+            <p className="mb-3 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">{error}</p>
+            <button
+              className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 py-2.5 text-[var(--font-regular)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+              onClick={() => void loadCatalog()}
+            >
+              Reintentar
+            </button>
           </div>
         ) : filtered.length === 0 ? (
           <p className="pt-12 text-center text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)]">

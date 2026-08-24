@@ -45,6 +45,8 @@
 ### Autenticación y conexión
 - [x] `LoginScreen` real: tenant + PIN, persiste sesión en Rust (api_request).
 - [x] `ConnectionScreen` conectada al UDP Rust (auto-reintento, banner, IP manual).
+- [x] **Menú de usuario** en el avatar (TopAppBar): nombre, rol, tenant, estado de licencia
+      y "Cerrar sesión".
 
 ### Terminal de ventas (POS)
 - [x] `TerminalScreen`: búsqueda global con debounce, chips de categorías reales,
@@ -56,10 +58,10 @@
 
 ### Inventario
 - [x] `InventoryScreen`: lista de productos reales, KPIs, filtro por categoría.
-- [x] **Editar/ajustar stock**: `POST /inventory/adjustments` (sheet cantidad ± y
-      motivo) — solo Admin (`inventory:adjust`).
-- [ ] FAB "+" crear producto funcional (`POST /products` con precios) — solo Admin
-      (`products:create`). (Hoy muestra alert "próximamente"; portar ProductFormSheet.)
+- [x] **CRUD completo de productos**: crear (`POST /products`), editar (`PATCH
+      /products/:id`), eliminar (borrado lógico, `DELETE /products/:id`) y ajustar stock
+      (`POST /inventory/adjustments`) — gated por `products:create/update/delete` e
+      `inventory:adjust`. `ProductFormSheet` portado.
 
 ### Reportes
 - [x] `ReportsScreen`: `GET /reports/quick-stats` (ventas hoy/ayer, ticket promedio,
