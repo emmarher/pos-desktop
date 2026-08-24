@@ -119,12 +119,11 @@ export default function InventoryScreen({
           </p>
         ) : (
           filtered.map(p => (
-            <button
+            <div
               key={p.id}
-              className={`glass-surface flex w-full items-center gap-3 rounded-[var(--radius-lg)] p-3 text-left transition-colors ${
-                canAdjustStock ? 'hover:bg-[var(--color-primary-soft)]' : ''
+              className={`glass-surface flex w-full items-center gap-3 rounded-[var(--radius-lg)] p-3 text-left ${
+                canAdjustStock ? 'cursor-pointer' : ''
               }`}
-              onClick={canAdjustStock ? () => setAdjustProduct(p) : undefined}
               data-testid={`row-${p.id}`}
             >
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-xl font-black text-[var(--color-primary)]">
@@ -139,7 +138,16 @@ export default function InventoryScreen({
                 </span>
               </span>
               <StatusChip status={stockStatus(p)} testID={`status-${p.id}`} />
-            </button>
+              {canAdjustStock && (
+                <button
+                  className="shrink-0 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
+                  onClick={() => setAdjustProduct(p)}
+                  data-testid={`ajustar-${p.id}`}
+                >
+                  Ajustar stock
+                </button>
+              )}
+            </div>
           ))
         )}
       </div>
