@@ -35,6 +35,26 @@ export class NetworkError extends ApiError {
   }
 }
 
+/** ¿El error es de conectividad (no de autenticación ni de negocio)? */
+export function isNetworkError(err: unknown): boolean {
+  return err instanceof NetworkError;
+}
+
+/**
+ * Limpia credenciales muertas en local (storage + Rust + estado Zustand).
+ * Se invoca cuando el refresh token ya no es válido: evita sesiones
+ * fantasma tras un reset de BD o expiración real.
+ */
+async function forceLocalLogout(): Promise<void> {
+  try {
+    const {useAuthStore} = await import('../stores/auth.store');
+    await useAuthStore.getState().logout();
+  } catch {
+    /* la limpieza de UI es best-effort; lo crítico es el storage */
+  }
+  await syncTokenToRust(null);
+}
+
 /** Sincroniza el servidor descubierto hacia Rust (api_set_server). */
 export async function syncServerToRust(ip: string, port: number): Promise<void> {
   try {
@@ -107,6 +127,9 @@ export async function apiRequest<T>(
       if (refreshed) {
         return apiRequest<T>(path, {...options, retried: true});
       }
+      // Refresh imposible → sesión muerta: limpiar credenciales locales
+      // y propagar el 401 (el router manda a login por isAuthenticated).
+      await forceLocalLogout();
       throw new ApiError(401, 'UNAUTHORIZED', 'Sesión expirada');
     }
     throw new NetworkError(message ?? 'No se pudo conectar con el servidor');

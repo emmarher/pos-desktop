@@ -120,6 +120,36 @@ export const useAuthStore = create<AuthState>(set => ({
     if (!tokens) {
       return false;
     }
+
+    /* Validar la sesión contra el servidor ANTES de autenticar en local:
+       si la BD se reinició o el tenant ya no existe, el refresh falla y
+       se limpian las credenciales muertas (nada de sesiones fantasma).
+       Si el servidor NO es alcanzable (offline), se conserva el modo de
+       gracia con el caché — comportamiento previo. */
+    try {
+      const {apiRequest} = await import('../api/client');
+      const refreshed = await apiRequest<{
+        access_token: string;
+        refresh_token: string;
+      }>('/auth/refresh', {
+        method: 'POST',
+        body: {refresh_token: tokens.refresh_token},
+        auth: false,
+      });
+      await storeTokens({
+        access_token: refreshed.access_token,
+        refresh_token: refreshed.refresh_token,
+      });
+    } catch (err) {
+      const {isNetworkError} = await import('../api/client');
+      if (!isNetworkError(err)) {
+        // 401 u otro error de sesión → credenciales inválidas
+        await AsyncStorage.removeItem(KEYCHAIN_AUTH);
+        return false;
+      }
+      /* offline → continuar con el caché */
+    }
+
     const cachedExpiry = await AsyncStorage.getItem(STORAGE_LICENSE_EXPIRY);
     let licenseState: AuthState['licenseState'] = 'active';
     if (cachedExpiry) {
