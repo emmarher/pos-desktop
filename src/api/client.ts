@@ -121,14 +121,38 @@ export async function apiRequest<T>(
   } catch (err) {
     // Los errores de Rust llegan como string (mensaje del backend/server).
     const message = typeof err === 'string' ? err : JSON.stringify(err);
-    // 401 → intentar refresh y reintentar una vez.
-    if (auth && !options.retried && /sesión|401|sessión|expirad/i.test(message)) {
+
+    /* Formato nuevo de Rust: "[código] mensaje" para errores HTTP.
+       Permite distinguir 401 (sesión muerta) de un fallo de red real. */
+    const statusMatch = message.match(/^\[(\d{3})\]\s*([\s\S]*)$/);
+    if (statusMatch) {
+      const status = parseInt(statusMatch[1] ?? '0', 10);
+      const msg = statusMatch[2] || 'Error del servidor';
+      if (auth && !options.retried && status === 401) {
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+          return apiRequest<T>(path, {...options, retried: true});
+        }
+        // Refresh imposible → sesión muerta: limpiar credenciales locales
+        // y propagar el 401 (el router manda a login por isAuthenticated).
+        await forceLocalLogout();
+      }
+      throw new ApiError(status, status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR', msg);
+    }
+
+    /* Fallback legado: mensajes sin código. Solo se trata como sesión
+       expirada si la heurística de texto lo indica; todo lo demás es
+       error de red/conectividad. */
+    if (
+      auth &&
+      !options.retried &&
+      /sesión|sessión|expirad/i.test(message) &&
+      !/No se pudo conectar/i.test(message)
+    ) {
       const refreshed = await tryRefreshToken();
       if (refreshed) {
         return apiRequest<T>(path, {...options, retried: true});
       }
-      // Refresh imposible → sesión muerta: limpiar credenciales locales
-      // y propagar el 401 (el router manda a login por isAuthenticated).
       await forceLocalLogout();
       throw new ApiError(401, 'UNAUTHORIZED', 'Sesión expirada');
     }

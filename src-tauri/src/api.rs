@@ -131,14 +131,16 @@ pub async fn api_request(
     // Desempaquetar el envoltorio { statusCode, message, data }.
     if let Some(obj) = json.as_object() {
         let code = obj.get("statusCode").and_then(|v| v.as_u64()).unwrap_or(status as u64);
-        // Error del servidor (4xx/5xx con data: []) → convertirlo a Err con mensaje.
+        // Error del servidor (4xx/5xx con data: []) → convertirlo a Err.
+        // El mensaje lleva el prefijo "[código] " para que el front pueda
+        // distinguir un 401 (sesión muerta) de un fallo real de red.
         if code >= 400 {
             let msg = obj
                 .get("message")
                 .and_then(|v| v.as_str())
                 .unwrap_or("Error del servidor")
                 .to_string();
-            return Err(msg);
+            return Err(format!("[{code}] {msg}"));
         }
         if let Some(data) = obj.get("data") {
             return Ok(data.clone());
