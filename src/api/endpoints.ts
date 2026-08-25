@@ -250,6 +250,32 @@ export function getCategories(): Promise<Category[]> {
   return apiRequest<Category[]>('/categories');
 }
 
+/** Payload para crear/editar categoría (POST/PATCH /categories). */
+export interface CategoryInput {
+  name: string;
+  prefix: string;
+  description?: string | null;
+  color?: string | null;
+  display_order?: number;
+  is_active?: boolean;
+}
+
+/** POST /categories — crear categoría (requiere categories:manage). */
+export function createCategory(input: CategoryInput): Promise<Category> {
+  return apiRequest<Category>('/categories', {method: 'POST', body: input});
+}
+
+/** PATCH /categories/:id — actualizar categoría (requiere categories:manage). */
+export function updateCategory(
+  id: string,
+  input: Partial<CategoryInput>,
+): Promise<Category> {
+  return apiRequest<Category>(`/categories/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: input,
+  });
+}
+
 /** GET /price-types — tipos de precio del tenant (RF-CA-003). */
 export function getPriceTypes(): Promise<PriceType[]> {
   return apiRequest<PriceType[]>('/price-types');

@@ -8,7 +8,7 @@
  * del JWT. Si la carga falla se muestra el error real + botón Reintentar.
  */
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Pencil, Trash2} from 'lucide-react';
+import {Pencil, Settings2, Trash2} from 'lucide-react';
 import type {Category, Product} from '../models';
 import {searchProducts, getCategories, deleteProduct} from '../api/endpoints';
 import {ApiError} from '../api/client';
@@ -24,6 +24,7 @@ import StatusChip, {StockStatus} from '../components/StatusChip';
 import Fab from '../components/Fab';
 import AdjustStockSheet from '../components/AdjustStockSheet';
 import ProductFormSheet from '../components/ProductFormSheet';
+import CategorySheet from '../components/CategorySheet';
 
 interface InventoryScreenProps {
   activeTab: NavTab;
@@ -60,6 +61,7 @@ export default function InventoryScreen({
   const [activeCategory, setActiveCategory] = useState('all');
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<FormState>({visible: false, mode: 'create'});
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -71,6 +73,7 @@ export default function InventoryScreen({
   const canCreateProduct = user?.permissions.includes('products:create') ?? false;
   const canEditProduct = user?.permissions.includes('products:update') ?? false;
   const canDeleteProduct = user?.permissions.includes('products:delete') ?? false;
+  const canManageCategories = user?.permissions.includes('categories:manage') ?? false;
 
   const loadInventory = useCallback(async () => {
     setLoading(true);
@@ -158,6 +161,18 @@ export default function InventoryScreen({
           {categories.map(cat => (
             <FilterChip key={cat.id} label={cat.name} active={activeCategory === cat.id} onPress={() => setActiveCategory(cat.id)} />
           ))}
+          {/* Gestionar categorías (solo con permiso categories:manage) */}
+          {canManageCategories && (
+            <button
+              className="flex items-center gap-1 rounded-full border border-dashed border-[var(--color-border)] px-3 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+              onClick={() => setCategoriesOpen(true)}
+              title="Crear o editar categorías"
+              data-testid="manage-categories"
+            >
+              <Settings2 size={14} />
+              Gestionar
+            </button>
+          )}
         </div>
 
         {/* KPIs */}
@@ -244,6 +259,11 @@ export default function InventoryScreen({
           ))
         )}
       </div>
+
+      {/* Gestión de categorías */}
+      {categoriesOpen && (
+        <CategorySheet onClose={() => setCategoriesOpen(false)} onChanged={loadInventory} />
+      )}
 
       {/* Formulario crear/editar */}
       {form.visible && (
