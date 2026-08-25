@@ -149,3 +149,93 @@ pub async fn api_request(
 
     Ok(json)
 }
+/* ── 5) UPLOAD DE ARCHIVOS (multipart) ───────────────────────────────── */
+
+/// Payload del comando api_upload_file.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiUploadFileInput {
+    /// Ruta del endpoint, ej. `/products/{id}/image`.
+    pub path: String,
+    /// Nombre de archivo para la parte multipart (ej. `foto.png`).
+    pub file_name: String,
+    /// MIME type (image/jpeg | image/png | image/webp).
+    pub mime: String,
+    /// Contenido del archivo en base64 (el webview no puede pasar binario).
+    pub bytes_base64: String,
+}
+
+/// Sube un archivo por multipart al backend pos-server.
+///
+/// Espeja `api_request`: desempaqueta `{statusCode, message, data}` y
+/// retorna errores como `"[código] mensaje"` (el front los distingue de
+/// fallos de red). Usado para las imágenes de productos.
+#[tauri::command]
+pub async fn api_upload_file(
+    state: State<'_, ApiState>,
+    input: ApiUploadFileInput,
+) -> Result<serde_json::Value, String> {
+    use base64::Engine;
+    use reqwest::multipart;
+
+    let ip = state
+        .server_ip
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "Servidor no configurado".to_string())?;
+    let port = state
+        .server_port
+        .lock()
+        .map_err(|e| e.to_string())?
+        .unwrap_or(3000);
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&input.bytes_base64)
+        .map_err(|e| format!("Archivo inválido: {e}"))?;
+
+    let url = format!("http://{ip}:{port}{}", input.path);
+
+    let client = reqwest::Client::new();
+    let mut req = client.post(&url).multipart(
+        multipart::Form::new().part(
+            "file",
+            multipart::Part::bytes(bytes)
+                .file_name(input.file_name)
+                .mime_str(&input.mime)
+                .map_err(|e| format!("MIME inválido: {e}"))?,
+        ),
+    );
+
+    if let Some(t) = state.access_token.lock().map_err(|e| e.to_string())?.clone() {
+        req = req.header("Authorization", format!("Bearer {t}"));
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("No se pudo conectar con el servidor: {e}"))?;
+
+    let status = resp.status().as_u16();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    let json: serde_json::Value = serde_json::from_str(&text)
+        .unwrap_or_else(|_| serde_json::Value::String(text));
+
+    // Mismo contrato que api_request: envoltorio {statusCode, message, data}.
+    if let Some(obj) = json.as_object() {
+        let code = obj.get("statusCode").and_then(|v| v.as_u64()).unwrap_or(status as u64);
+        if code >= 400 {
+            let msg = obj
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Error del servidor")
+                .to_string();
+            return Err(format!("[{code}] {msg}"));
+        }
+        if let Some(data) = obj.get("data") {
+            return Ok(data.clone());
+        }
+    }
+
+    Ok(json)
+}

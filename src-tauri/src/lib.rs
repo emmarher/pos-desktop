@@ -74,6 +74,7 @@ pub fn run() {
             api::api_set_server,
             api::api_set_token,
             api::api_request,
+            api::api_upload_file,
             serial::list_ports,
             serial::open_port,
             serial::close_port,
