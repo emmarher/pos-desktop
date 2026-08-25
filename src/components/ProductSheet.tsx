@@ -2,13 +2,15 @@
  * components/ProductSheet.tsx — Hoja para agregar producto (RF-VE-002).
  *
  * Portado de pos-mobile a React DOM/Tailwind. Al tocar un producto se abre:
- * nombre, stock, selector de 3 precios (Público/Mayoreo/Especial), cantidad
- * y subtotal. Al confirmar agrega al carrito (Zustand).
+ * foto (o placeholder con inicial), nombre, stock, selector de 3 precios
+ * (Público/Mayoreo/Especial), cantidad y subtotal. Al confirmar agrega al
+ * carrito (Zustand).
  */
 import {useEffect, useState} from 'react';
 import {Minus, Plus, X} from 'lucide-react';
 import type {PriceType, Product} from '../models';
 import {getProductPrices} from '../constants/prices';
+import {resolveImageUrl} from '../lib/images';
 import {useCartStore} from '../stores/cart.store';
 import POSButton from './POSButton';
 
@@ -22,15 +24,19 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
   const addItem = useCartStore(state => state.addItem);
   const [quantity, setQuantity] = useState(1);
   const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null);
+  /** La foto falló al cargar → placeholder con inicial (degradación grácil). */
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     setQuantity(1);
     setSelectedPriceId(null);
+    setImageFailed(false);
   }, [product]);
 
   if (!product) return null;
 
   const outOfStock = product.stock <= 0;
+  const imageUrl = resolveImageUrl(product.imagen_url);
   const availablePrices = getProductPrices(product, priceTypes);
   const selectedPrice =
     availablePrices.find(p => p.priceType.id === selectedPriceId) ?? availablePrices[0];
@@ -60,6 +66,25 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
       >
         {/* Manija */}
         <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-[var(--color-border)]" />
+
+        {/* Foto grande del producto (o placeholder con inicial) */}
+        <div className="mx-auto mb-4 flex h-32 w-32 items-center justify-center overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-primary-soft)]">
+          {imageUrl && !imageFailed ? (
+            <img
+              src={imageUrl}
+              alt={product.name}
+              loading="lazy"
+              decoding="async"
+              draggable={false}
+              className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
+            />
+          ) : (
+            <span className="text-6xl font-black text-[var(--color-primary)]">
+              {product.name.charAt(0).toUpperCase()}
+            </span>
+          )}
+        </div>
 
         <div className="mb-4 text-center">
           <h2 className="text-[var(--font-medium)] font-extrabold text-[var(--color-text)]">
@@ -147,7 +172,7 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
         />
         <div className="mt-4 flex items-center justify-center">
           <button
-            className="flex items-center gap-1 text-[var(--font-small)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]"
+            className="flex items-center gap-1 text-[var(--font-small)] text-[var(--color-danger)] hover:text-[var(--color-primary)]"
             onClick={onClose}
           >
             <X size={14} /> Cancelar
