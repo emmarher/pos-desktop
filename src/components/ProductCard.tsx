@@ -1,10 +1,11 @@
 /**
  * components/ProductCard.tsx — Tarjeta de producto del catálogo (spec 3.6).
  *
- * Portado de pos-mobile a React DOM/Tailwind. Muestra inicial del producto,
- * nombre, precio y estado agotado.
+ * Portado de pos-mobile a React DOM/Tailwind. Muestra thumbnail (foto real
+ * del backend o inicial como placeholder), nombre, precio y estado agotado.
  */
 import type {Product} from '../models';
+import ProductThumb from './ProductThumb';
 
 interface ProductCardProps {
   product: Product;
@@ -21,17 +22,15 @@ export default function ProductCard({product, onPress, testID}: ProductCardProps
       onClick={onPress}
       data-testid={testID}
     >
-      {/* Thumbnail: inicial del producto */}
-      <div className="relative mb-2 flex h-20 w-20 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)]">
-        <span className="text-3xl font-black text-[var(--color-primary)]">
-          {product.name.charAt(0)}
-        </span>
+      {/* Thumbnail: foto del producto o inicial */}
+      <span className="relative mb-2">
+        <ProductThumb name={product.name} imagenUrl={product.imagen_url} size={80} />
         {out && (
           <span className="absolute inset-0 flex items-center justify-center rounded-[var(--radius-md)] bg-black/50 text-xs font-bold text-white">
             Agotado
           </span>
         )}
-      </div>
+      </span>
       <span className="w-full truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
         {product.name}
       </span>

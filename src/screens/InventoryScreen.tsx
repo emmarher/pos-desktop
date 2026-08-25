@@ -12,12 +12,14 @@ import {Pencil, Trash2} from 'lucide-react';
 import type {Category, Product} from '../models';
 import {searchProducts, getCategories, deleteProduct} from '../api/endpoints';
 import {ApiError} from '../api/client';
+import {toast} from '../hooks/useToast';
 import {useAuthStore} from '../stores/auth.store';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import SearchInput from '../components/SearchInput';
 import FilterChip from '../components/FilterChip';
 import KpiCard from '../components/KpiCard';
+import ProductThumb from '../components/ProductThumb';
 import StatusChip, {StockStatus} from '../components/StatusChip';
 import Fab from '../components/Fab';
 import AdjustStockSheet from '../components/AdjustStockSheet';
@@ -116,6 +118,8 @@ export default function InventoryScreen({
   }, [products, query, activeCategory]);
 
   const handleDelete = async (p: Product) => {
+    // Confirmación con window.confirm está ok (acción destructiva); el error
+    // se notifica vía toast (no window.alert).
     if (!window.confirm(`¿Eliminar "${p.name}" del catálogo? Esta acción es permanente.`)) {
       return;
     }
@@ -123,7 +127,7 @@ export default function InventoryScreen({
       await deleteProduct(p.id);
       void loadInventory();
     } catch (err) {
-      window.alert(`Error al eliminar: ${errMsg(err)}`);
+      toast.error(`Error al eliminar: ${errMsg(err)}`);
     }
   };
 
@@ -193,9 +197,7 @@ export default function InventoryScreen({
               className="glass-surface flex w-full items-center gap-3 rounded-[var(--radius-lg)] p-3"
               data-testid={`row-${p.id}`}
             >
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-xl font-black text-[var(--color-primary)]">
-                {p.name.charAt(0)}
-              </span>
+              <ProductThumb name={p.name} imagenUrl={p.imagen_url} size={48} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
                   {p.name}
@@ -210,7 +212,7 @@ export default function InventoryScreen({
               <div className="flex shrink-0 items-center gap-1">
                 {canAdjustStock && (
                   <button
-                    className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
+                    className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/60 px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
                     onClick={() => setAdjustProduct(p)}
                     data-testid={`ajustar-${p.id}`}
                   >
