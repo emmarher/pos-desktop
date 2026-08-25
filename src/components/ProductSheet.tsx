@@ -9,9 +9,10 @@
 import {useEffect, useState} from 'react';
 import {Minus, Plus, X} from 'lucide-react';
 import type {PriceType, Product} from '../models';
-import {getProductPrices} from '../constants/prices';
+import {getProductPrices, type ProductPriceOption} from '../constants/prices';
 import {resolveImageUrl} from '../lib/images';
 import {useCartStore} from '../stores/cart.store';
+import {toast} from '../hooks/useToast';
 import POSButton from './POSButton';
 
 interface ProductSheetProps {
@@ -56,6 +57,46 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
       isCaj: false,
     });
     onClose();
+  };
+
+  /**
+   * Selección de tipo de precio alineada con el servidor: si el precio
+   * requiere una cantidad mínima (ej. Mayoreo desde 12), la cantidad se
+   * ajusta automáticamente; si no hay stock suficiente para el mínimo, no
+   * se permite seleccionarlo. Sin esto, el backend aplicaría el fallback
+   * al precio base y los pagos no cubrirían el total.
+   */
+  const handleSelectPrice = (option: ProductPriceOption) => {
+    if (quantity < option.minQuantity) {
+      if (product.stock >= option.minQuantity) {
+        setQuantity(option.minQuantity);
+        toast.info(
+          `${option.priceType.name} aplica desde ${option.minQuantity} pzas.`,
+        );
+      } else {
+        toast.error(
+          `${option.priceType.name} requiere ${option.minQuantity} pzas y solo hay ${product.stock}.`,
+        );
+        return;
+      }
+    }
+    setSelectedPriceId(option.priceType.id);
+  };
+
+  /**
+   * Al bajar de la cantidad mínima del tipo seleccionado, el servidor ya no
+   * aplicaría ese precio (fallback a base) → revertimos a Público para que
+   * lo cobrado coincida siempre con lo mostrado.
+   */
+  const handleDecrement = () => {
+    setQuantity(q => {
+      const next = Math.max(1, q - 1);
+      if (next < selectedPrice.minQuantity && selectedPrice.minQuantity > 1) {
+        setSelectedPriceId(availablePrices[0].priceType.id);
+        toast.info(`Cantidad menor a ${selectedPrice.minQuantity}: precio Público.`);
+      }
+      return next;
+    });
   };
 
   return (
@@ -114,12 +155,12 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
         {/* Chips de precios por tipo */}
         {availablePrices.length > 1 && (
           <div className="mb-4 flex flex-wrap justify-center gap-2">
-            {availablePrices.map(({priceType, price}) => {
+            {availablePrices.map(({priceType, price, minQuantity}) => {
               const isSelected = priceType.id === selectedPrice.priceType.id;
               return (
                 <button
                   key={priceType.id}
-                  onClick={() => setSelectedPriceId(priceType.id)}
+                  onClick={() => handleSelectPrice({priceType, price, minQuantity})}
                   className={`flex items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 transition-colors ${
                     isSelected
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
@@ -139,7 +180,7 @@ export default function ProductSheet({product, onClose, priceTypes}: ProductShee
         <div className="mb-5 flex items-center justify-center gap-6">
           <button
             className="flex h-14 w-14 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:opacity-80"
-            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+            onClick={handleDecrement}
             data-testid="qty-minus"
           >
             <Minus size={22} />

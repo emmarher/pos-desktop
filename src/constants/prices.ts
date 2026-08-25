@@ -11,6 +11,11 @@ import {PriceType, Product, ProductPrice} from '../models';
 export interface ProductPriceOption {
   priceType: PriceType;
   price: number;
+  /**
+   * Cantidad mínima para que el servidor aplique este precio
+   * (product_prices.min_quantity; el fallback del backend es el precio base).
+   */
+  minQuantity: number;
 }
 
 /**
@@ -37,7 +42,7 @@ export function getProductPrices(
           is_default: false,
           display_order: 0,
         } as PriceType);
-      return {priceType, price: pp.price};
+      return {priceType, price: pp.price, minQuantity: pp.min_quantity ?? 1};
     });
   }
 
@@ -51,5 +56,5 @@ export function getProductPrices(
       is_default: true,
       display_order: 0,
     };
-  return [{priceType: publicType, price: product.price}];
+  return [{priceType: publicType, price: product.price, minQuantity: 1}];
 }
