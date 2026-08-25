@@ -160,6 +160,71 @@ export async function apiRequest<T>(
   }
 }
 
+/**
+ * Sube un archivo por multipart vía Rust (api_upload_file).
+ * Mismo contrato de errores que apiRequest: "[código] mensaje" → ApiError,
+ * 401 → intenta refresh y reintenta una vez; sin código → NetworkError.
+ *
+ * @param path Endpoint del backend (ej. `/products/{id}/image`).
+ * @param file Archivo a subir (validar MIME/tamaño en el caller).
+ */
+export async function apiUploadFile<T>(
+  path: string,
+  file: {name: string; mime: string; bytes: ArrayBuffer},
+  options: {retried?: boolean} = {},
+): Promise<T> {
+  const store = useServerStore.getState();
+  const server = store.server ?? {
+    ip: (await AsyncStorage.getItem(STORAGE_SERVER_IP)) ?? '',
+    port: parseInt((await AsyncStorage.getItem(STORAGE_SERVER_PORT)) ?? '3000', 10),
+  };
+  if (!server.ip) {
+    throw new NetworkError('Servidor no configurado');
+  }
+  await syncServerToRust(server.ip, server.port ?? 3000);
+
+  const {getStoredTokens} = await import('../stores/auth.store');
+  const tokens = await getStoredTokens();
+  await syncTokenToRust(tokens?.access_token ?? null);
+
+  // ArrayBuffer → base64 en bloques (evita límites de String.fromCharCode).
+  const bytes = new Uint8Array(file.bytes);
+  let binary = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  const bytesBase64 = btoa(binary);
+
+  try {
+    const result = await invoke<unknown>('api_upload_file', {
+      input: {
+        path,
+        fileName: file.name,
+        mime: file.mime,
+        bytesBase64,
+      },
+    });
+    return result as T;
+  } catch (err) {
+    const message = typeof err === 'string' ? err : JSON.stringify(err);
+    const statusMatch = message.match(/^\[(\d{3})\]\s*([\s\S]*)$/);
+    if (statusMatch) {
+      const status = parseInt(statusMatch[1] ?? '0', 10);
+      const msg = statusMatch[2] || 'Error del servidor';
+      if (!options.retried && status === 401) {
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+          return apiUploadFile<T>(path, file, {retried: true});
+        }
+        await forceLocalLogout();
+      }
+      throw new ApiError(status, status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR', msg);
+    }
+    throw new NetworkError(message ?? 'No se pudo conectar con el servidor');
+  }
+}
+
 /** POST /auth/refresh vía Rust; guarda el nuevo par de tokens. */
 async function tryRefreshToken(): Promise<boolean> {
   try {

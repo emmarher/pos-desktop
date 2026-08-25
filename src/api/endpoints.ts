@@ -31,7 +31,7 @@ import {
   ScaleReading,
   ServiceQualityEvent,
 } from '../models';
-import {apiRequest} from './client';
+import {apiRequest, apiUploadFile} from './client';
 
 /* ──────────────────────────────────────────────────────────────────────
  * AUTH Y LICENCIA
@@ -142,6 +142,45 @@ export function deleteProduct(id: string): Promise<Product> {
   return apiRequest<Product>(`/products/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+/** Respuesta de los endpoints de imagen de producto. */
+export interface ProductImageResponse {
+  imagen_url: string | null;
+}
+
+/** MIME types de imagen aceptados por el backend. */
+export const IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+] as const;
+
+/** Tamaño máximo de imagen del backend (5 MB, S3_MAX_FILE_SIZE_MB). */
+export const IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+
+/**
+ * POST /products/:id/image — sube/reemplaza la imagen (products:update).
+ * multipart con campo `file`; el backend convierte a WebP y responde.
+ */
+export function uploadProductImage(
+  id: string,
+  file: {name: string; mime: string; bytes: ArrayBuffer},
+): Promise<ProductImageResponse> {
+  return apiUploadFile<ProductImageResponse>(
+    `/products/${encodeURIComponent(id)}/image`,
+    file,
+  );
+}
+
+/** DELETE /products/:id/image — quita la imagen (products:update). */
+export function deleteProductImage(
+  id: string,
+): Promise<ProductImageResponse> {
+  return apiRequest<ProductImageResponse>(
+    `/products/${encodeURIComponent(id)}/image`,
+    {method: 'DELETE'},
+  );
 }
 
 /* ──────────────────────────────────────────────────────────────────────
