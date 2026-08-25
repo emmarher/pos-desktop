@@ -6,13 +6,15 @@
  * (nombre, rol, tenant, licencia) y la acción de cierre de sesión.
  */
 import {useEffect, useRef, useState} from 'react';
-import {LogOut, ChevronDown} from 'lucide-react';
+import {LogOut, ChevronDown, ArrowLeft} from 'lucide-react';
 import {useAuthStore} from '../stores/auth.store';
 
 interface TopAppBarProps {
   title: string;
   /** Acción del menú (logout). Se invoca al pulsar "Cerrar sesión". */
   onLogout?: () => void;
+  /** Acción de retroceso. Si se define, se muestra botón "<" a la izquierda (pantallas secundarias). */
+  onBack?: () => void;
 }
 
 const LICENSE_LABEL: Record<string, string> = {
@@ -22,7 +24,7 @@ const LICENSE_LABEL: Record<string, string> = {
   unknown: 'Desconocido',
 };
 
-export default function TopAppBar({title, onLogout}: TopAppBarProps) {
+export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const user = useAuthStore(s => s.user);
@@ -50,8 +52,19 @@ export default function TopAppBar({title, onLogout}: TopAppBarProps) {
   };
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 backdrop-blur-[var(--glass-blur)]">
+    <header className="relative z-40 flex h-16 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 backdrop-blur-[var(--glass-blur)]">
       <div className="flex items-center gap-3">
+        {/* Botón de retroceso: solo en pantallas secundarias que pasan onBack. */}
+        {onBack && (
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[var(--color-text)] transition-colors hover:bg-[var(--color-primary-soft)]"
+            onClick={onBack}
+            aria-label="Regresar"
+            data-testid="appbar-back"
+          >
+            <ArrowLeft size={20} />
+          </button>
+        )}
         <h1 className="truncate text-[var(--font-medium)] font-bold text-[var(--color-text)]">
           {title}
         </h1>
@@ -72,7 +85,7 @@ export default function TopAppBar({title, onLogout}: TopAppBarProps) {
         </button>
 
         {open && (
-          <div className="absolute right-0 top-12 z-40 w-64 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-lg">
+          <div className="absolute right-12 top-1 z-50 w-64 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-lg">
             <div className="border-b border-[var(--color-border)] p-4">
               <p className="truncate text-[var(--font-regular)] font-bold text-[var(--color-text)]">
                 {user?.name ?? 'Usuario'}
