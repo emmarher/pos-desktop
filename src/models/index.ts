@@ -145,6 +145,8 @@ export interface Product {
   is_scale_enabled: boolean;
   allow_fractional_sale: boolean;
   is_active: boolean;
+  /** Ruta relativa de la imagen servida por el backend: /images/{tenant}/prod_x.webp */
+  imagen_url?: string | null;
   category?: Category | null;
   base_unit?: MeasurementUnit | null;
   sale_unit?: MeasurementUnit | null;
