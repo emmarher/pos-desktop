@@ -19,6 +19,7 @@ import ProductCard from '../components/ProductCard';
 import ProductSheet from '../components/ProductSheet';
 import CartSheet from '../components/CartSheet';
 import Fab from '../components/Fab';
+import {getScaleDeviceId} from '../lib/scale';
 
 interface PosTerminalScreenProps {
   activeTab: NavTab;
@@ -46,6 +47,9 @@ export default function PosTerminalScreen({
 
   const cartCount = useCartStore(s => s.items.length);
   const user = useAuthStore(s => s.user);
+
+  /* device_id de la báscula si esta máquina la tiene registrada (HardwareScreen). */
+  const scaleDeviceId = getScaleDeviceId() ?? undefined;
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -134,8 +138,13 @@ export default function PosTerminalScreen({
         )}
       </div>
 
-      {/* Sheets */}
-      <ProductSheet product={selectedProduct} onClose={() => setSelectedProduct(null)} priceTypes={priceTypes} />
+      {/* Sheets (product card) */}
+      <ProductSheet
+        product={selectedProduct}
+        onClose={() => setSelectedProduct(null)}
+        priceTypes={priceTypes}
+        scaleDeviceId={scaleDeviceId}
+      />
       <CartSheet visible={cartVisible} onClose={() => setCartVisible(false)} />
 
       {/* FAB carrito */}
