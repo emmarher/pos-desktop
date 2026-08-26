@@ -3,6 +3,7 @@
  *
  * Portado de pos-mobile a React DOM/Tailwind. Muestra ítems (desglose
  * individual), método de pago, totales y confirma POST /sales (vía Rust).
+ * Para productos MASS/CAJ muestra el peso en kg.
  */
 import {useEffect, useState} from 'react';
 import {X} from 'lucide-react';
@@ -10,7 +11,9 @@ import {useCartStore} from '../stores/cart.store';
 import type {PaymentMethod} from '../models';
 import {createSale} from '../api/endpoints';
 import {ApiError} from '../api/client';
+import {toast} from '../hooks/useToast';
 import POSButton from './POSButton';
+import {formatWeightKg} from '../lib/scale';
 
 interface CartSheetProps {
   visible: boolean;
@@ -66,11 +69,11 @@ export default function CartSheet({visible, onClose, onSaleDone}: CartSheetProps
       clearCart();
       onClose();
       onSaleDone?.(sale as {folio: string});
-      window.alert(`Venta registrada · Folio: ${folio}`);
+      toast.success(`Venta registrada · Folio: ${folio}`);
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : 'No se pudo registrar la venta.';
-      window.alert(`Error al vender: ${message}`);
+      toast.error(`Error al vender: ${message}`);
     } finally {
       setSubmitting(false);
     }
@@ -95,27 +98,36 @@ export default function CartSheet({visible, onClose, onSaleDone}: CartSheetProps
               El carrito está vacío
             </p>
           ) : (
-            items.map(item => (
-              <div
-                key={item.key}
-                className="flex items-center border-b border-[var(--color-border)] py-2"
-              >
-                <div className="flex-1">
-                  <p className="truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                    {item.product.name}
-                  </p>
-                  <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                    {item.quantity} × ${item.unitPrice.toFixed(2)}
-                  </p>
+            items.map(item => {
+              const isMass = item.weightKg != null && !item.isCaj;
+              const isCaj = item.isCaj === true;
+              const displayQty = isMass
+                ? formatWeightKg(item.weightKg!) + ' kg'
+                : isCaj
+                ? `1 caja × ${formatWeightKg(item.weightKg!)} kg`
+                : `${item.quantity} × $${item.unitPrice.toFixed(2)}`;
+              return (
+                <div
+                  key={item.key}
+                  className="flex items-center border-b border-[var(--color-border)] py-2"
+                >
+                  <div className="flex-1">
+                    <p className="truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                      {item.product.name}
+                    </p>
+                    <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                      {displayQty}
+                    </p>
+                  </div>
+                  <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                    ${item.subtotal.toFixed(2)}
+                  </span>
+                  <button className="ml-3 p-1 text-[var(--color-danger)] hover:opacity-70" onClick={() => removeItem(item.key)}>
+                    <X size={16} />
+                  </button>
                 </div>
-                <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                  ${item.subtotal.toFixed(2)}
-                </span>
-                <button className="ml-3 p-1 text-[var(--color-danger)] hover:opacity-70" onClick={() => removeItem(item.key)}>
-                  <X size={16} />
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -130,7 +142,7 @@ export default function CartSheet({visible, onClose, onSaleDone}: CartSheetProps
               onClick={() => setMethod(m)}
               className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
                 method === m
-                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                  ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/50 text-[var(--color-on-primary)]'
                   : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
               }`}
               data-testid={`pay-${m}`}
