@@ -10,7 +10,7 @@
  *   - MASS: peso en kg (input decimal 3 decimales, step 0.001)
  *   - CAJ: 1 caja + peso en kg (báscula o manual)
  */
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {Minus, Plus, X, RefreshCw, Scale} from 'lucide-react';
 import type {PriceType, Product} from '../models';
 import {getProductPrices, type ProductPriceOption} from '../constants/prices';
@@ -55,6 +55,7 @@ export default function ProductSheet({
   const [weightKg, setWeightKg] = useState<number>(KG_MIN);
   const [isReadingScale, setIsReadingScale] = useState(false);
   const [scaleError, setScaleError] = useState<string | null>(null);
+  const weightInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setQuantity(1);
@@ -301,10 +302,18 @@ export default function ProductSheet({
             <div className="flex items-center gap-3">
               <input
                 type="text"
+                ref={weightInputRef}
                 value={weightKgStr}
                 onChange={e => {
-                  const val = parseWeightKg(e.target.value);
-                  setWeightKgStr(e.target.value);
+                  const raw = e.target.value;
+                  // Solo dígitos y máximo UN punto decimal
+                  const filtered = raw.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*$/, '$1');
+                  // Evitar múltiples puntos
+                  const parts = filtered.split('.');
+                  const clean = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filtered;
+
+                  setWeightKgStr(clean);
+                  const val = parseWeightKg(clean);
                   setWeightKg(clampWeight(val, maxWeightKg));
                 }}
                 onBlur={e => {
@@ -313,10 +322,11 @@ export default function ProductSheet({
                   setWeightKg(clamped);
                   setWeightKgStr(formatWeightKg(clamped));
                 }}
-                onFocus={e => e.currentTarget.select()}
+                onFocus={e => setTimeout(() => e.currentTarget.select(), 0)}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="mass-weight-input"
                 inputMode="decimal"
+                pattern="[0-9.]*"
               />
               <span className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
                 kg (mín {formatWeightKg(KG_MIN)}, máx {formatWeightKg(maxWeightKg)})
@@ -376,8 +386,15 @@ export default function ProductSheet({
                 type="text"
                 value={weightKgStr}
                 onChange={e => {
-                  const val = parseWeightKg(e.target.value);
-                  setWeightKgStr(e.target.value);
+                  const raw = e.target.value;
+                  // Solo dígitos y máximo UN punto decimal
+                  const filtered = raw.replace(/[^0-9.]/g, '').replace(/^(\d*\.?\d*).*$/, '$1');
+                  // Evitar múltiples puntos
+                  const parts = filtered.split('.');
+                  const clean = parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : filtered;
+
+                  setWeightKgStr(clean);
+                  const val = parseWeightKg(clean);
                   setWeightKg(clampWeight(val, maxWeightKg));
                 }}
                 onBlur={e => {
@@ -386,10 +403,11 @@ export default function ProductSheet({
                   setWeightKg(clamped);
                   setWeightKgStr(formatWeightKg(clamped));
                 }}
-                onFocus={e => e.currentTarget.select()}
+                onFocus={e => setTimeout(() => e.currentTarget.select(), 0)}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="caj-weight-input"
                 inputMode="decimal"
+                pattern="[0-9.]*"
               />
               <span className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
                 kg
