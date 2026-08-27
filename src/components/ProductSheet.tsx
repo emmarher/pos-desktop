@@ -305,6 +305,7 @@ export default function ProductSheet({
                 value={formatWeightKg(weightKg)}
                 onChange={e => setWeightKg(clampWeight(parseWeightKg(e.target.value), maxWeightKg))}
                 onBlur={e => setWeightKg(clampWeight(parseWeightKg(e.target.value), maxWeightKg))}
+                onFocus={e => e.currentTarget.select()}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="mass-weight-input"
                 inputMode="decimal"
@@ -371,6 +372,7 @@ export default function ProductSheet({
                 value={formatWeightKg(weightKg)}
                 onChange={e => setWeightKg(clampWeight(parseWeightKg(e.target.value), maxWeightKg))}
                 onBlur={e => setWeightKg(clampWeight(parseWeightKg(e.target.value), maxWeightKg))}
+                onFocus={e => e.currentTarget.select()}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="caj-weight-input"
                 inputMode="decimal"
