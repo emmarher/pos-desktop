@@ -62,13 +62,15 @@ export function formatWeightKg(kg: number, decimals = KG_DECIMALS): string {
 }
 
 /**
- * Parsea string a kg (number). Acepta "0.25", "1,5", ".5", "1.234".
+ * Parsea string a kg (number). Solo acepta PUNTO como separador decimal.
+ * - Sin punto → kilos enteros (ej: "1" → 1.000 kg)
+ * - Con punto → decimales = gramos (ej: "1.65" → 1.650 kg, "0.25" → 0.250 kg)
  * Retorna 0 si no es válido.
  */
 export function parseWeightKg(str: string): number {
   if (!str) return 0;
-  // Reemplazar coma por punto si el usuario usa notación local
-  const normalized = str.replace(',', '.');
+  const normalized = str.trim();
+  // Solo punto como separador decimal (no coma)
   const val = parseFloat(normalized);
   return Number.isFinite(val) && val > 0 ? val : 0;
 }
