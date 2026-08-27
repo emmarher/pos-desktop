@@ -67,6 +67,14 @@ export default function ProductSheet({
     setScaleError(null);
   }, [product]);
 
+  /* Seleccionar todo el texto del input al cambiar de producto (mount/swap) */
+  useEffect(() => {
+    if (weightInputRef.current) {
+      weightInputRef.current.focus();
+      requestAnimationFrame(() => weightInputRef.current?.select());
+    }
+  }, [product?.id]);
+
   if (!product) return null;
 
   /* Detectar tipo de producto (ya sabemos que product no es null) */
@@ -303,6 +311,7 @@ export default function ProductSheet({
               <input
                 type="text"
                 ref={weightInputRef}
+                defaultValue={weightKgStr}
                 value={weightKgStr}
                 onChange={e => {
                   const raw = e.target.value;
@@ -322,7 +331,10 @@ export default function ProductSheet({
                   setWeightKg(clamped);
                   setWeightKgStr(formatWeightKg(clamped));
                 }}
-                onFocus={e => setTimeout(() => e.currentTarget.select(), 0)}
+                onFocus={() => {
+                  // requestAnimationFrame asegura selección tras paint del navegador
+                  requestAnimationFrame(() => weightInputRef.current?.select());
+                }}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="mass-weight-input"
                 inputMode="decimal"
@@ -384,6 +396,8 @@ export default function ProductSheet({
             <div className="flex items-center gap-3">
               <input
                 type="text"
+                ref={weightInputRef}
+                defaultValue={weightKgStr}
                 value={weightKgStr}
                 onChange={e => {
                   const raw = e.target.value;
@@ -403,7 +417,9 @@ export default function ProductSheet({
                   setWeightKg(clamped);
                   setWeightKgStr(formatWeightKg(clamped));
                 }}
-                onFocus={e => setTimeout(() => e.currentTarget.select(), 0)}
+                onFocus={() => {
+                  requestAnimationFrame(() => weightInputRef.current?.select());
+                }}
                 className="flex-1 w-32 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
                 data-testid="caj-weight-input"
                 inputMode="decimal"
