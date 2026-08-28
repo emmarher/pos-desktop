@@ -11,7 +11,7 @@ export interface POSButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> 
   onPress?: () => void;
   loading?: boolean;
   large?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'success' | 'danger';
   'data-testid'?: string;
 }
 
@@ -29,11 +29,15 @@ export default function POSButton({
   const commonClass =
     'inline-flex items-center justify-center rounded-md font-medium transition-colors focus-outline-none focus:ring-2 focus:ring-inset';
 
-  const primaryClass = 'focus:ring-primary-500';
+  const primaryClass = 'bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:opacity-90 focus:ring-primary-500';
 
-  const secondaryClass = 'focus:ring-secondary-500';
+  const secondaryClass = 'bg-[var(--color-secondary)] text-[var(--color-on-primary)] hover:opacity-90 focus:ring-secondary-500';
 
-  const ghostClass = 'border border-primary/20 text-primary';
+  const ghostClass = 'border border-primary/20 text-primary hover:bg-[var(--color-primary-soft)]';
+
+  const successClass = 'border border-[var(--color-success)] text-[var(--color-success)] hover:bg-[var(--color-success-soft)] focus:ring-success-500';
+
+  const dangerClass = 'border border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] focus:ring-danger-500';
 
   const baseClasses = `${commonClass} focus-outline-none`;
 
@@ -45,7 +49,11 @@ export default function POSButton({
       ? secondaryClass
       : variant === 'ghost'
         ? ghostClass
-        : '';
+        : variant === 'success'
+          ? successClass
+          : variant === 'danger'
+            ? dangerClass
+            : '';
 
   const fullClass = `${baseClasses} ${variantClasses} ${largeClasses} ${className}`.trim();
 

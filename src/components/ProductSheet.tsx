@@ -11,7 +11,7 @@
  *   - CAJ: 1 caja + peso en kg (báscula o manual)
  */
 import {useEffect, useRef, useState} from 'react';
-import {Minus, Plus, X, RefreshCw, Scale} from 'lucide-react';
+import {Minus, Plus, RefreshCw, Scale} from 'lucide-react';
 import type {PriceType, Product} from '../models';
 import {getProductPrices, type ProductPriceOption} from '../constants/prices';
 import {resolveImageUrl} from '../lib/images';
@@ -496,15 +496,15 @@ export default function ProductSheet({
           onPress={handleConfirm}
           disabled={outOfStock}
           large
+          variant="success"
         />
-        <div className="mt-4 flex items-center justify-center">
-          <button
-            className="flex items-center gap-1 text-[var(--font-small)] text-[var(--color-danger)] hover:text-[var(--color-primary)]"
-            onClick={onClose}
-          >
-            <X size={14} /> Cancelar
-          </button>
-        </div>
+        <POSButton
+          title="Cancelar"
+          onPress={onClose}
+          large
+          variant="danger"
+          className="mt-4"
+        />
       </div>
     </div>
   );

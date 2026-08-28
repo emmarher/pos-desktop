@@ -174,13 +174,16 @@ export default function CartSheet({visible, onClose, onSaleDone}: CartSheetProps
           loading={submitting}
           disabled={items.length === 0}
           large
+          variant="success"
           data-testid="btn-confirm-sale"
         />
-        <div className="mt-3 text-center">
-          <button className="text-[var(--font-small)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]" onClick={onClose}>
-            Cerrar
-          </button>
-        </div>
+        <POSButton
+          title="Cerrar"
+          onPress={onClose}
+          large
+          variant="danger"
+          className="mt-3"
+        />
       </div>
     </div>
   );
