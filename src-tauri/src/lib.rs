@@ -20,6 +20,7 @@
 mod api;
 mod hardware;
 mod printer;
+mod printer_usb;
 mod scale;
 mod serial;
 mod udp;
@@ -80,6 +81,9 @@ pub fn run() {
             serial::close_port,
             serial::write_port,
             serial::read_port,
+            printer_usb::list_printers,
+            printer_usb::print_raw_usb,
+            printer_usb::print_test_usb,
             hardware::start_hardware,
             hardware::stop_hardware,
         ])

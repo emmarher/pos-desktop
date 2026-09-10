@@ -31,8 +31,17 @@ export interface HardwareConfig {
   can_print: boolean;
   can_scale: boolean;
   printer_serial?: SerialConfig;
+  /** Nombre del spooler Windows (80mm USB). Si está presente → WinSpool RAW. */
+  printer_name?: string;
   scale_serial?: SerialConfig;
   access_token?: string;
+}
+
+export interface PrinterInfo {
+  name: string;
+  driverName?: string;
+  portName?: string;
+  isOnline: boolean;
 }
 
 /** Lectura de báscula emitida por Rust (evento 'scale-reading'). */
@@ -47,6 +56,25 @@ export interface ScaleReading {
 /** Lista los puertos serial del sistema (Rust serial::list_ports). */
 export async function listPorts(): Promise<SerialPortInfo[]> {
   return invoke<SerialPortInfo[]>('list_ports');
+}
+
+/** Lista impresoras Windows spooler (Rust printer_usb::list_printers). */
+export async function listPrinters(): Promise<PrinterInfo[]> {
+  try {
+    return await invoke<PrinterInfo[]>('list_printers');
+  } catch {
+    return [];
+  }
+}
+
+/** Envía bytes RAW (base64) a impresora por nombre del spooler. */
+export async function printRawUsb(printerName: string, dataBase64: string): Promise<number> {
+  return invoke<number>('print_raw_usb', {printerName, dataBase64});
+}
+
+/** Imprime ticket de prueba por USB (80mm 48 chars) via Rust. */
+export async function printTestUsb(printerName: string): Promise<void> {
+  return invoke('print_test_usb', {printerName});
 }
 
 /** Abre un puerto serial (Rust serial::open_port). */
@@ -88,14 +116,15 @@ export async function printTicket(
     throw new Error(`No se pudo abrir el puerto: ${e}`);
   });
   try {
-    // El builder ESC/POS está en Rust; el front envía el texto y Rust lo
-    // imprime. Reuso write_port con el contenido codificado: la secuencia
-    // ESC/POS la arma Rust en hardware.rs (build_print_sequence). Aquí
-    // imprimimos directamente el contenido, que el PC con can_print sabe
-    // interpretar. (Para impresión real se usa el orquestador start_hardware.)
     const b64 = btoa(unescape(encodeURIComponent(content)));
     await writePort(b64);
   } finally {
     await closePort().catch(() => {});
   }
+}
+
+/** Imprime ticket por USB spooler (80mm) — WinSpool RAW. */
+export async function printTicketUsb(printerName: string, content: string): Promise<void> {
+  const b64 = btoa(unescape(encodeURIComponent(content)));
+  await printRawUsb(printerName, b64);
 }

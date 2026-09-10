@@ -29,8 +29,12 @@ pub struct HardwareConfig {
     pub device_id: String,
     pub can_print: bool,
     pub can_scale: bool,
-    /// Configuración del puerto serial (impresora).
+    /// Configuración del puerto serial (impresora, legacy COM).
     pub printer_serial: Option<crate::serial::SerialConfig>,
+    /// Nombre de impresora Windows spooler (80mm USB, ej. "80mm Series Printer").
+    /// Si está presente, se usa WinSpool RAW; si no, fallback a serial.
+    #[serde(default)]
+    pub printer_name: Option<String>,
     /// Configuración del puerto serial (báscula).
     pub scale_serial: Option<ScaleConfig>,
     /// Token JWT para las llamadas autenticadas al servidor.
@@ -104,12 +108,20 @@ pub fn start_hardware(
         let mut scale_serial: Option<Box<dyn serialport::SerialPort>> = None;
         let mut scale_last_weight: Option<f64> = None;
 
-        if cfg.can_print {
+        // Branch USB vs Serial: si hay printer_name (80mm USB WinSpool) no abrir COM.
+        let uses_usb = cfg.printer_name.is_some();
+        if cfg.can_print && !uses_usb {
             if let Some(sc) = &cfg.printer_serial {
                 match open_serial(&sc.port, sc.baud_rate) {
                     Ok(p) => printer_serial = Some(p),
                     Err(e) => emit_error(&app_handle, "printer", &e),
                 }
+            } else {
+                emit_error(
+                    &app_handle,
+                    "printer",
+                    "can_print=true pero sin printer_serial ni printer_name; configura la impresora en Hardware",
+                );
             }
         }
         if cfg.can_scale {
@@ -127,8 +139,18 @@ pub fn start_hardware(
             }
 
             if cfg.can_print {
-                if let Some(port) = printer_serial.as_mut() {
-                    match poll_print_jobs(&client, &base_url, &cfg, port, &app_handle).await {
+                // USB (WinSpool RAW) no requiere puerto serial — 80mm 203dpi
+                if let Some(printer_name) = cfg.printer_name.clone() {
+                    match poll_print_jobs_usb(&client, &base_url, &cfg, &printer_name, &app_handle)
+                        .await
+                    {
+                        Ok(()) => {}
+                        Err(e) => emit_error(&app_handle, "printer", &e),
+                    }
+                } else if let Some(port) = printer_serial.as_mut() {
+                    match poll_print_jobs_serial(&client, &base_url, &cfg, port, &app_handle)
+                        .await
+                    {
                         Ok(()) => {}
                         Err(e) => emit_error(&app_handle, "printer", &e),
                     }
@@ -172,16 +194,15 @@ fn open_serial(
         .map_err(|e| format!("no se pudo abrir {port}: {e}"))
 }
 
-/// Poll de /print-jobs: obtiene el pendiente, imprime y hace PATCH.
-async fn poll_print_jobs(
+// ---------------------------------------------------------------------------
+// Poll helpers — 80mm 48 chars (203dpi: 384 dots / 8)
+// ---------------------------------------------------------------------------
+
+async fn fetch_pending_jobs(
     client: &reqwest::Client,
     base_url: &str,
     config: &HardwareConfig,
-    port: &mut Box<dyn serialport::SerialPort>,
-    app: &AppHandle,
-) -> Result<(), String> {
-    use std::io::Write;
-
+) -> Result<Vec<PrintJob>, String> {
     let url = format!(
         "{base_url}/print-jobs?target_device_id={}&status=PENDING",
         config.device_id
@@ -195,37 +216,80 @@ async fn poll_print_jobs(
         .await
         .map_err(|e| format!("GET /print-jobs falló: {e}"))?;
     if !resp.status().is_success() {
-        return Ok(()); // servidor no accesible → reintentar en el siguiente ciclo
+        return Ok(vec![]);
     }
-
     #[derive(Deserialize)]
     struct Envelope {
         data: Option<Vec<PrintJob>>,
     }
-    let jobs: Vec<PrintJob> = resp
+    Ok(resp
         .json::<Envelope>()
         .await
         .map(|e| e.data.unwrap_or_default())
-        .unwrap_or_default();
+        .unwrap_or_default())
+}
 
+async fn patch_job_status(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    job_id: &str,
+    status: &str,
+    app: &AppHandle,
+) {
+    let patch_url = format!("{base_url}/print-jobs/{job_id}");
+    let body = serde_json::json!({ "status": status });
+    let mut patch = client.patch(&patch_url).json(&body);
+    if let Some(token) = &config.access_token {
+        patch = patch.header("Authorization", format!("Bearer {token}"));
+    }
+    if let Err(e) = patch.send().await {
+        emit_error(app, "printer", &format!("PATCH /print-jobs falló: {e}"));
+    }
+}
+
+/// Poll vía WinSpool RAW (80mm USB) — delegada a printer_usb::send_raw.
+async fn poll_print_jobs_usb(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    printer_name: &str,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let jobs = fetch_pending_jobs(client, base_url, config).await?;
     for job in jobs {
         let content = job.content.unwrap_or_default();
-        let seq = build_print_sequence(&content, 42);
+        // 80mm 203dpi → 48 chars (384 dots)
+        let seq = build_print_sequence(&content, 48);
+        let result = crate::printer_usb::send_raw(printer_name, &seq);
+        let new_status = if result.is_ok() { "COMPLETED" } else { "FAILED" };
+        if let Err(e) = &result {
+            emit_error(app, "printer", e);
+        }
+        patch_job_status(client, base_url, config, &job.id, new_status, app).await;
+    }
+    Ok(())
+}
+
+/// Poll vía puerto serial (legacy COM) — ESC/POS clásico.
+async fn poll_print_jobs_serial(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    port: &mut Box<dyn serialport::SerialPort>,
+    app: &AppHandle,
+) -> Result<(), String> {
+    use std::io::Write;
+    let jobs = fetch_pending_jobs(client, base_url, config).await?;
+    for job in jobs {
+        let content = job.content.unwrap_or_default();
+        let seq = build_print_sequence(&content, 48);
         let write_result = port.write_all(&seq).and_then(|_| port.flush());
-        let new_status = if write_result.is_ok() {
-            "COMPLETED"
-        } else {
-            "FAILED"
-        };
-        let patch_url = format!("{base_url}/print-jobs/{}", job.id);
-        let body = serde_json::json!({ "status": new_status });
-        let mut patch = client.patch(&patch_url).json(&body);
-        if let Some(token) = &config.access_token {
-            patch = patch.header("Authorization", format!("Bearer {token}"));
+        let new_status = if write_result.is_ok() { "COMPLETED" } else { "FAILED" };
+        if let Err(e) = &write_result {
+            emit_error(app, "printer", &format!("Serial write falló: {e}"));
         }
-        if let Err(e) = patch.send().await {
-            emit_error(app, "printer", &format!("PATCH /print-jobs falló: {e}"));
-        }
+        patch_job_status(client, base_url, config, &job.id, new_status, app).await;
     }
     Ok(())
 }
@@ -289,11 +353,29 @@ mod tests {
             can_print: true,
             can_scale: false,
             printer_serial: None,
+            printer_name: None,
             scale_serial: None,
             access_token: None,
         };
         assert_eq!(cfg.server_port, None);
         assert!(cfg.can_print);
+    }
+
+    #[test]
+    fn hardware_config_usb_branch() {
+        let cfg = HardwareConfig {
+            server_ip: "10.0.0.5".into(),
+            server_port: Some(3000),
+            device_id: "dev-usb".into(),
+            can_print: true,
+            can_scale: false,
+            printer_serial: None,
+            printer_name: Some("80mm Series Printer".into()),
+            scale_serial: None,
+            access_token: None,
+        };
+        assert!(cfg.printer_name.is_some());
+        assert!(cfg.printer_serial.is_none());
     }
 
     #[test]
