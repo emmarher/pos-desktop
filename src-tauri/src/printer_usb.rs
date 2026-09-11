@@ -117,8 +117,9 @@ fn list_printers_windows() -> Result<Vec<PrinterInfo>, String> {
                 Some(info.pPortName.to_string().unwrap_or_default())
             }
         };
-        // Filtrar impresoras virtuales PDF/XPS/Fax que no sirven para 80mm directo.
-        if is_virtual_printer(&name) {
+        // Filtrar virtuales PDF/XPS/Fax — pero NUNCA filtrar USB001 real (puerto físico 80mm).
+        let is_usb001 = port.as_deref().map(|p| p.eq_ignore_ascii_case("USB001")).unwrap_or(false);
+        if !is_usb001 && is_virtual_printer(&name) {
             continue;
         }
         // PRINTER_INFO_2W.Status bit 0x00000002 = offline? Usamos is_online = true por defecto.

@@ -58,12 +58,12 @@ export async function listPorts(): Promise<SerialPortInfo[]> {
   return invoke<SerialPortInfo[]>('list_ports');
 }
 
-/** Lista impresoras Windows spooler (Rust printer_usb::list_printers). Filtra virtuales PDF/XPS. */
+/** Lista impresoras Windows spooler (Rust printer_usb::list_printers). Filtra virtuales PDF/XPS salvo USB001 real. */
 export async function listPrinters(): Promise<PrinterInfo[]> {
   try {
     const raw = await invoke<PrinterInfo[]>('list_printers');
-    // Defensa extra en frontend (Rust ya filtra en Windows mock).
-    return raw.filter(p => !VIRTUAL_PRINTER_RE.test(p.name));
+    // Defensa extra en frontend (Rust ya filtra); USB001 físico nunca se filtra.
+    return raw.filter(p => p.portName?.toUpperCase() === 'USB001' || !VIRTUAL_PRINTER_RE.test(p.name));
   } catch {
     return [];
   }
@@ -143,7 +143,7 @@ export interface PersistedUsbPrinter {
 
 const VIRTUAL_PRINTER_RE = /microsoft print to pdf|microsoft xps|xps document writer|onenote|fax|adobe pdf|pdf24|print to pdf/i;
 
-/** Obtiene la impresora USB persistida (seleccionada en HardwareScreen). Ignora virtuales PDF. */
+/** Obtiene la impresora USB persistida (seleccionada en HardwareScreen). Ignora virtuales salvo USB001. */
 export async function getPersistedUsbPrinter(): Promise<PersistedUsbPrinter | null> {
   try {
     const { default: AsyncStorage } = await import('../lib/storage');
@@ -151,7 +151,8 @@ export async function getPersistedUsbPrinter(): Promise<PersistedUsbPrinter | nu
     if (!raw) return null;
     const parsed = JSON.parse(raw) as PersistedUsbPrinter;
     if (!parsed?.printerName) return null;
-    if (VIRTUAL_PRINTER_RE.test(parsed.printerName)) {
+    // USB001 real nunca se considera virtual, aunque el nombre contenga "PDF" genérico.
+    if (parsed.portName?.toUpperCase() !== 'USB001' && VIRTUAL_PRINTER_RE.test(parsed.printerName)) {
       await AsyncStorage.removeItem(STORAGE_PRINTER_USB_KEY);
       return null;
     }

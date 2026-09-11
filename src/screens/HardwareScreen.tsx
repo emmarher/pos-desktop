@@ -48,7 +48,7 @@ export default function HardwareScreen() {
   const VIRTUAL_PRINTER_RE = /microsoft print to pdf|microsoft xps|xps document writer|onenote|fax|adobe pdf|pdf24|print to pdf/i;
 
   const filterPrinters = (list: PrinterInfo[]): PrinterInfo[] =>
-    list.filter(p => !VIRTUAL_PRINTER_RE.test(p.name));
+    list.filter(p => p.portName?.toUpperCase() === 'USB001' || !VIRTUAL_PRINTER_RE.test(p.name));
 
   const loadPrinters = useCallback(async () => {
     try {
@@ -56,10 +56,11 @@ export default function HardwareScreen() {
       // Doble defensa: aunque Rust ya filtra, excluimos virtuales aquí por si queda alguna (PDF24, etc).
       const list = filterPrinters(raw);
       setPrinters(list);
-      // Restaurar selección persistida para impresión directa — limpiar si era virtual
+      // Restaurar selección persistida — virtual solo se limpia si no es USB001 físico
       const persisted = await getPersistedUsbPrinter();
       if (persisted?.printerName) {
-        if (VIRTUAL_PRINTER_RE.test(persisted.printerName)) {
+        const isUsb001 = persisted.portName?.toUpperCase() === 'USB001';
+        if (!isUsb001 && VIRTUAL_PRINTER_RE.test(persisted.printerName)) {
           // Persistida era PDF/XPS -> limpiar
           const { default: AsyncStorage } = await import('../lib/storage');
           await AsyncStorage.removeItem('pos.hardware.usb');
@@ -101,7 +102,9 @@ export default function HardwareScreen() {
 
   // Persistir al cambiar selección (impresión directa por defecto)
   const handleSelectPrinter = async (name: string) => {
-    if (name && VIRTUAL_PRINTER_RE.test(name)) {
+    const infoForCheck = printers.find(p => p.name === name);
+    const isUsb001 = infoForCheck?.portName?.toUpperCase() === 'USB001';
+    if (name && !isUsb001 && VIRTUAL_PRINTER_RE.test(name)) {
       setStatus('Impresora virtual no válida para ticket 80mm (PDF/XPS/Fax). Selecciona la térmica 80mm.');
       return;
     }
@@ -180,10 +183,10 @@ export default function HardwareScreen() {
           {printers.length === 0 ? (
             <div>
               <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                Sin impresora 80mm detectada. Instala el driver 80mm y aparecerá como "80mm Series Printer" (USB001).
+                Sin impresora 80mm detectada en USB001. Verifica en Windows: Configuración → Impresoras → Puerto USB001 (tu puerto es USB001).
               </p>
               <p className="mt-1 text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                Las virtuales PDF/XPS/Fax se ocultan porque no sirven para ticket térmico.
+                Las virtuales PDF/XPS/Fax se ocultan. Si tu térmica está en USB001 y no aparece, reinstala el driver 80mm en ese puerto.
               </p>
             </div>
           ) : (
