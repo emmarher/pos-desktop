@@ -11,6 +11,7 @@ import {useServerStore} from '../stores/server.store';
 import {discoverServer, applyServer} from '../api/discovery';
 import {syncServerToRust} from '../api/client';
 import {useAuthStore} from '../stores/auth.store';
+import {toast} from '../hooks/useToast';
 import POSButton from '../components/POSButton';
 import GlassBackground from '../components/GlassBackground';
 import GlassSurface from '../components/GlassSurface';
@@ -51,7 +52,7 @@ export default function ConnectionScreen() {
   const handleManualConnect = useCallback(async () => {
     const ip = manualIp.trim();
     if (!ip) {
-      window.alert('Ingresa la dirección IP del servidor.');
+      toast.error('Ingresa la dirección IP del servidor.');
       return;
     }
     const port = parseInt(manualPort, 10) || 3000;
@@ -66,7 +67,7 @@ export default function ConnectionScreen() {
 
   /* ── 3B) QR (placeholder) ─────────────────────────────────────────── */
   const handleQrPairing = () => {
-    window.alert('Emparejamiento QR: próximamente en próxima iteración.');
+    toast.info('Emparejamiento QR: próximamente en próxima iteración.');
   };
 
   /* ── 3) ESTADO DE UI ──────────────────────────────────────────────── */

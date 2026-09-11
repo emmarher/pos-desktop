@@ -12,6 +12,7 @@ import ConnectionScreen from '../screens/ConnectionScreen';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import HardwareScreen from '../screens/HardwareScreen';
+import ToastContainer from '../components/ToastContainer';
 
 /* ── Placeholder temporal (se reemplazan en F4 las pantallas restantes) ── */
 function Placeholder({title}: {title: string}) {
@@ -33,29 +34,39 @@ export default function AppRoutes() {
 
   if (licenseState === 'expired') {
     return (
-      <Routes>
-        <Route path="*" element={<Placeholder title="Licencia vencida" />} />
-      </Routes>
+      <>
+        <Routes>
+          <Route path="*" element={<Placeholder title="Licencia vencida" />} />
+        </Routes>
+        {/* ToastContainer global: captura notificaciones sin window.alert. */}
+        <ToastContainer />
+      </>
     );
   }
 
   if (isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/" element={<DashboardScreen />} />
-        <Route path="/hardware" element={<HardwareScreen />} />
-        <Route path="/receipt/:saleId" element={<Placeholder title="Recibo" />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <>
+        <Routes>
+          <Route path="/" element={<DashboardScreen />} />
+          <Route path="/hardware" element={<HardwareScreen />} />
+          <Route path="/receipt/:saleId" element={<Placeholder title="Recibo" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        <ToastContainer />
+      </>
     );
   }
 
   // Sin sesión: arranque de conexión UDP → login (manual/IP).
   return (
-    <Routes>
-      <Route path="/" element={<ConnectionScreen />} />
-      <Route path="/login" element={<LoginScreen />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/" element={<ConnectionScreen />} />
+        <Route path="/login" element={<LoginScreen />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+      <ToastContainer />
+    </>
   );
 }

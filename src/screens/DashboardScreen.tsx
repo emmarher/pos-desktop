@@ -11,6 +11,7 @@ import type {NavTab} from '../components/BottomNavBar';
 import PosTerminalScreen from './PosTerminalScreen';
 import InventoryScreen from './InventoryScreen';
 import ReportsScreen from './ReportsScreen';
+import TicketsScreen from './TicketsScreen';
 import {useAuthStore} from '../stores/auth.store';
 
 export default function DashboardScreen() {
@@ -20,9 +21,12 @@ export default function DashboardScreen() {
   const user = useAuthStore(s => s.user);
 
   const canViewReports = user?.permissions.includes('reports:read') ?? false;
-  const visibleTabs: NavTab[] = canViewReports
-    ? ['caja', 'inventario', 'reportes']
-    : ['caja', 'inventario'];
+  const canViewInventory = user?.permissions.includes('inventory:read') ?? false;
+  const canViewTickets = user?.permissions.includes('sales:read_own') ?? false;
+  const visibleTabs: NavTab[] = ['caja'];
+  if (canViewInventory) visibleTabs.push('inventario');
+  if (canViewReports) visibleTabs.push('reportes');
+  if (canViewTickets) visibleTabs.push('tickets');
 
   const effectiveTab: NavTab = visibleTabs.includes(tab) ? tab : 'caja';
 
@@ -60,6 +64,20 @@ export default function DashboardScreen() {
     return (
       <>
         <InventoryScreen
+          activeTab={effectiveTab}
+          onTabChange={setTab}
+          onLogout={handleLogout}
+          visibleTabs={visibleTabs}
+        />
+        {hardwareButton}
+      </>
+    );
+  }
+
+  if (effectiveTab === 'tickets') {
+    return (
+      <>
+        <TicketsScreen
           activeTab={effectiveTab}
           onTabChange={setTab}
           onLogout={handleLogout}

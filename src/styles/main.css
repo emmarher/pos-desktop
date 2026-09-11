@@ -33,7 +33,11 @@
   --glass-blur: 20px;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME
+   ═══════════════════════════════════════════════════════════════ */
 html[data-theme='light'] {
+  /* ── Identidad corporativa (INALTERABLES) ── */
   --color-background: #fcfdf2;
   --color-surface: rgba(252, 223, 212, 0.55);
   --color-surface-solid: #ffffff;
@@ -43,23 +47,45 @@ html[data-theme='light'] {
   --color-primary-soft: #f3a0c0;
   --color-on-primary: #ffffff;
   --color-secondary: #9b79b9;
-  --color-secondary-soft: #fcdfd4;
+  --color-secondary-soft: rgba(155, 121, 185, 0.12);
   --color-text: #4e2a5b;
   --color-text-secondary: #6d4e8d;
   --color-text-disabled: #9b79b9;
   --color-border: rgba(78, 42, 91, 0.18);
   --color-border-glass: rgba(255, 255, 255, 0.8);
-  --color-danger: #c62828;
-  --color-danger-soft: rgba(198, 40, 40, 0.1);
-  --color-success: #4e2a5b;
-  --color-warning: #9b79b9;
-  --color-warning-soft: #fcdfd4;
-  --color-info: #6d4e8d;
   --color-shadow: rgba(78, 42, 91, 0.25);
   --color-blob: rgba(155, 121, 185, 0.1);
+
+  /* ── Semánticos: ALTA VISIBILIDAD ──
+     Diseñados para saltar inmediatamente sobre fondo crema/púrpura.
+     NUNCA deben confundirse con la identidad corporativa. */
+
+  --color-danger: #e11d48;
+  --color-danger-soft: rgba(225, 29, 72, 0.20);
+  --color-danger-bg: rgba(225, 29, 72, 0.12);
+  --color-on-danger: #ffffff;
+
+  --color-success: #16a34a;
+  --color-success-soft: rgba(22, 163, 74, 0.20);
+  --color-success-bg: rgba(22, 163, 74, 0.10);
+  --color-on-success: #ffffff;
+
+  --color-warning: #ea580c;
+  --color-warning-soft: rgba(234, 88, 12, 0.18);
+  --color-warning-bg: rgba(234, 88, 12, 0.10);
+  --color-on-warning: #ffffff;
+
+  --color-info: #0ea5e9;
+  --color-info-soft: rgba(14, 165, 233, 0.18);
+  --color-info-bg: rgba(14, 165, 233, 0.10);
+  --color-on-info: #ffffff;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   DARK THEME
+   ═══════════════════════════════════════════════════════════════ */
 html[data-theme='dark'] {
+  /* ── Identidad corporativa (INALTERABLES) ── */
   --color-background: #0f1020;
   --color-surface: rgba(38, 40, 72, 0.62);
   --color-surface-solid: #262848;
@@ -75,16 +101,36 @@ html[data-theme='dark'] {
   --color-text-disabled: #6e708f;
   --color-border: rgba(110, 112, 224, 0.22);
   --color-border-glass: rgba(255, 255, 255, 0.52);
-  --color-danger: #f87171;
-  --color-danger-soft: rgba(248, 113, 113, 0.52);
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-warning-soft: rgba(251, 190, 36, 0.57);
-  --color-info: #6e70e0;
   --color-shadow: rgba(0, 0, 0, 0.5);
   --color-blob: rgba(110, 112, 224, 0.06);
+
+  /* ── Semánticos: ALTA VISIBILIDAD ──
+     En dark los colores brillantes actúan como "luces" sobre fondo oscuro. */
+
+  --color-danger: #ff6b6b;
+  --color-danger-soft: rgba(255, 107, 107, 0.25);
+  --color-danger-bg: rgba(255, 107, 107, 0.12);
+  --color-on-danger: #450a0a;
+
+  --color-success: #4ade80;
+  --color-success-soft: rgba(74, 222, 128, 0.25);
+  --color-success-bg: rgba(74, 222, 128, 0.12);
+  --color-on-success: #064e3b;
+
+  --color-warning: #fde047;
+  --color-warning-soft: rgba(253, 224, 71, 0.22);
+  --color-warning-bg: rgba(253, 224, 71, 0.10);
+  --color-on-warning: #422006;
+
+  --color-info: #7dd3fc;
+  --color-info-soft: rgba(125, 211, 252, 0.22);
+  --color-info-bg: rgba(125, 211, 252, 0.10);
+  --color-on-info: #0c4a6e;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   ESTILOS BASE
+   ═══════════════════════════════════════════════════════════════ */
 html,
 body,
 #root {

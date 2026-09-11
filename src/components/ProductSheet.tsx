@@ -276,23 +276,23 @@ export default function ProductSheet({
           </span>
         </div>
 
-        {/* Chips de precios por tipo */}
+        {/* Tipos de precio: una sola fila — nombre arriba y precio abajo de cada uno */}
         {availablePrices.length > 1 && (
-          <div className="mb-4 flex flex-wrap justify-center gap-2">
+          <div className="mb-4 flex flex-row items-stretch justify-between gap-2">
             {availablePrices.map(({priceType, price, minQuantity}) => {
               const isSelected = priceType.id === selectedPrice.priceType.id;
               return (
                 <button
                   key={priceType.id}
                   onClick={() => handleSelectPrice({priceType, price, minQuantity})}
-                  className={`flex items-center gap-2 rounded-[var(--radius-md)] border px-3 py-2 transition-colors ${
+                  className={`flex flex-1 flex-col items-center rounded-[var(--radius-md)] border px-3 py-2.5 transition-colors ${
                     isSelected
                       ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
                       : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
                   }`}
                   data-testid={`price-${priceType.code}`}
                 >
-                  <span className="text-[var(--font-small)] font-semibold">{priceType.name}</span>
+                  <span className="text-[var(--font-micro)] font-semibold">{priceType.name}</span>
                   <span className="text-[var(--font-regular)] font-extrabold">${price.toFixed(2)}</span>
                 </button>
               );
@@ -497,13 +497,14 @@ export default function ProductSheet({
           disabled={outOfStock}
           large
           variant="success"
+          className="m-2"
         />
         <POSButton
           title="Cancelar"
           onPress={onClose}
           large
           variant="danger"
-          className="mt-4"
+          className="m-2"
         />
       </div>
     </div>

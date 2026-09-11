@@ -19,6 +19,7 @@ import ProductCard from '../components/ProductCard';
 import ProductSheet from '../components/ProductSheet';
 import CartSheet from '../components/CartSheet';
 import Fab from '../components/Fab';
+import type {CartItem} from '../models';
 import {getScaleDeviceId} from '../lib/scale';
 
 interface PosTerminalScreenProps {
@@ -37,7 +38,25 @@ export default function PosTerminalScreen({
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [cartVisible, setCartVisible] = useState(false);
+  /* Carrito: sidecar persistente en pantallas anchas; FAB + collar en estrechas. */
+  const [cartCollapsed, setCartCollapsed] = useState(false);
+  /* Detectar ancho de ventana para modo sidecar (wide) vs FAB (narrow). */
+  const SIDECAR_BREAKPOINT = 768; /* >=768px → sidecar; <768px → FAB */
+  const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
+  const isWideScreen = windowWidth >= SIDECAR_BREAKPOINT;
+
+  /* En pantallas estrechas, el carrito comienza minimizado (collar) hasta que
+     el usuario lo abre con el FAB. */
+  useEffect(() => {
+    if (!isWideScreen) setCartCollapsed(true);
+  }, [isWideScreen]);
+
+  /* Escuchar resize para alternar entre sidecar y FAB automáticamente. */
+  useEffect(() => {
+    const onResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -74,6 +93,19 @@ export default function PosTerminalScreen({
     void loadCatalog();
   }, [loadCatalog, user]);
 
+  /* RF-VE-003: al confirmar venta, el stock local se actualiza al instante
+     (el backend también descuenta ATOMIC; aquí reflejamos en el grid). */
+  const handleSaleDone = (_sale: {folio: string; id: string; items: CartItem[]}) => {
+    const clearProduct = (p: Product) => {
+      const sold = _sale.items.find(it => it.product.id === p.id);
+      if (!sold) return p;
+      const newStock = Math.max(0, (p.stock ?? 0) - sold.quantity);
+      return {...p, stock: newStock};
+    };
+    setProducts(prev => prev.map(clearProduct));
+    setSelectedProduct(null);
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return products.filter(pr => {
@@ -107,8 +139,11 @@ export default function PosTerminalScreen({
         </div>
       </div>
 
-      {/* Catálogo en grid */}
-      <div className="relative flex-1 overflow-y-auto p-4 pb-24">
+      {/* Catálogo en grid (deja espacio para el carrito lateral cuando está expandido) */}
+      <div className={`relative flex-1 overflow-y-auto p-4 pb-24 ${
+        /* Deja espacio para el sidecar solo cuando está expandido */
+        !cartCollapsed ? 'pr-[320px]' : ''
+      }`}>
         {loading ? (
           <div className="flex h-full w-full items-center justify-center">
             <span className="text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
@@ -138,17 +173,30 @@ export default function PosTerminalScreen({
         )}
       </div>
 
-      {/* Sheets (product card) */}
+      {/* Sheets (producto) */}
       <ProductSheet
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
         priceTypes={priceTypes}
         scaleDeviceId={scaleDeviceId}
       />
-      <CartSheet visible={cartVisible} onClose={() => setCartVisible(false)} />
 
-      {/* FAB carrito */}
-      <Fab onPress={() => setCartVisible(true)} badgeCount={cartCount} testID="fab-cart" />
+      {/* Carrito lateral persistente (RF-VE-001) — siempre visible.
+          En pantallas estrechas comienza minimizado; el FAB lo abre. */}
+      <CartSheet
+        collapsed={cartCollapsed}
+        onToggleCollapse={() => setCartCollapsed(!cartCollapsed)}
+        onSaleDone={handleSaleDone}
+      />
+
+      {/* FAB carrito — solo en pantallas estrechas (< 768px) */}
+      {!isWideScreen && (
+        <Fab
+          onPress={() => setCartCollapsed(!cartCollapsed)}
+          badgeCount={cartCount}
+          testID="fab-cart"
+        />
+      )}
 
       {/* Navegación inferior */}
       <BottomNavBar active={activeTab} onChange={onTabChange} cartCount={cartCount} visibleTabs={visibleTabs} />

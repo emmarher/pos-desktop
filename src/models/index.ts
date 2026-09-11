@@ -247,6 +247,55 @@ export interface SaleResponse {
 
 /* ── 5) POST-VENTA (QoS, IMPRESIÓN, BÁSCULA) ────────────────────────── */
 
+/** Ítem de venta completo (GET /sales/:id) — espejo de sale_items. */
+export interface SaleItemDetail {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_barcode: string | null;
+  price_type_id: string | null;
+  quantity: number;
+  base_quantity: number;
+  alternate_quantity: number | null;
+  unit_id: string;
+  unit_price: number;
+  discount_applied: number;
+  subtotal: number;
+}
+
+/** Pago completo (GET /sales/:id) — espejo de sale_payments. */
+export interface SalePaymentDetail {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+  reference_code: string | null;
+  change_amount: number;
+  created_at: string;
+}
+
+/** Venta completa con ítems y pagos (GET /sales/:id). */
+export interface SaleDetail {
+  id: string;
+  tenant_id: string;
+  device_id: string;
+  seller_id: string;
+  customer_id: string | null;
+  folio_number: number;
+  folio_prefix: string;
+  folio: string;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  status: string;
+  payment_state: string;
+  cancel_reason: string | null;
+  notes: string | null;
+  created_at: string;
+  items: SaleItemDetail[];
+  payments: SalePaymentDetail[];
+}
+
 /** Evento de calidad de servicio (RF-QS) */
 export interface ServiceQualityEvent {
   id: string;
@@ -274,4 +323,16 @@ export interface ScaleReading {
   scale_unit: string;
   scale_is_stable: boolean;
   last_heartbeat_at: string;
+}
+
+/** Ticket almacenado para reimpresión (GET /sales/:id/ticket). */
+export interface StoredTicket {
+  id: string;
+  sale_id: string;
+  ticket_type: string;
+  content: string;
+  content_format: string;
+  printed_at: string | null;
+  reprinted_count: number;
+  created_at: string;
 }

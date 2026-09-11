@@ -8,6 +8,7 @@ import {useEffect, useState} from 'react';
 import {Minus, Plus, X} from 'lucide-react';
 import type {Product} from '../models';
 import {adjustInventory} from '../api/endpoints';
+import {toast} from '../hooks/useToast';
 import POSButton from './POSButton';
 
 interface AdjustStockSheetProps {
@@ -21,6 +22,9 @@ export default function AdjustStockSheet({product, onClose, onAdjusted}: AdjustS
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  /* Errores inline por campo (validación visible, no window.alert). */
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
     setQuantity(1);
     setReason('');
@@ -29,26 +33,25 @@ export default function AdjustStockSheet({product, onClose, onAdjusted}: AdjustS
   if (!product) return null;
 
   const handleSubmit = async () => {
-    if (!reason.trim()) {
-      window.alert('El motivo del ajuste es obligatorio.');
-      return;
-    }
-    if (quantity === 0) {
-      window.alert('La cantidad no puede ser cero.');
-      return;
-    }
+    // Validación inline: motivo y cantidad obligatorios (notifica sin alert).
+    const e: Record<string, string> = {};
+    if (!reason.trim()) e.reason = 'El motivo del ajuste es obligatorio.';
+    if (quantity === 0) e.quantity = 'La cantidad no puede ser cero.';
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+
     setSubmitting(true);
     try {
       await adjustInventory({product_id: product.id, quantity, reason: reason.trim()});
       onAdjusted();
       onClose();
-      window.alert(
+      toast.success(
         quantity > 0
           ? `Se agregaron ${quantity} unidades a ${product.name}.`
           : `Se retiraron ${Math.abs(quantity)} unidades de ${product.name}.`,
       );
     } catch (err) {
-      window.alert(`Error al ajustar: ${err}`);
+      toast.error(`Error al ajustar: ${err}`);
     } finally {
       setSubmitting(false);
     }
@@ -77,7 +80,12 @@ export default function AdjustStockSheet({product, onClose, onAdjusted}: AdjustS
             <Minus size={22} />
           </button>
           <div className="min-w-20 text-center">
-            <span className="block text-[var(--font-xlarge)] font-extrabold text-[var(--color-text)]">
+            <span
+              className={`
+                block text-[var(--font-xlarge)] font-extrabold
+                ${errors.quantity ? 'text-[var(--color-danger)]' : 'text-[var(--color-text)]'}
+              `.trim()}
+            >
               {quantity > 0 ? `+${quantity}` : quantity}
             </span>
             <span className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
@@ -91,21 +99,32 @@ export default function AdjustStockSheet({product, onClose, onAdjusted}: AdjustS
             <Plus size={22} />
           </button>
         </div>
+        {errors.quantity && (
+          <p className="mt-1 text-center text-[var(--font-micro)] text-[var(--color-danger)]">{errors.quantity}</p>
+        )}
 
         {/* Motivo */}
         <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
           Motivo *
         </label>
         <textarea
-          className="mb-5 min-h-12 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] p-3 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
+          className={`mb-5 min-h-12 w-full rounded-[var(--radius-md)] border p-3 text-[var(--font-regular)] text-[var(--color-text)] outline-none ${
+            errors.reason
+              ? 'border-[var(--color-danger)] bg-[var(--color-danger-soft)]/50'
+              : 'border-[var(--color-border)] bg-[var(--color-input)]'
+          }`}
           placeholder="Ej. Entrada de mercancía / Merma / Conteo"
           value={reason}
-          onChange={e => setReason(e.target.value)}
+          onChange={e => {
+            setReason(e.target.value);
+            if (errors.reason) setErrors(existing => ({...existing, reason: ''})); // limpiar error al escribir.
+          }}
         />
+        {errors.reason && <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{errors.reason}</p>}
 
         <POSButton title={submitting ? 'Guardando…' : 'Guardar ajuste'} onPress={handleSubmit} loading={submitting} large />
         <div className="mt-4 flex justify-center">
-          <button className="flex items-center gap-1 text-[var(--font-small)] text-[var(--color-text-secondary)] hover:text-[var(--color-primary)]" onClick={onClose}>
+          <button className="flex items-center gap-1 text-[var(--font-small)] text-[var(--color-danger)] hover:text-[var(--color-primary)]" onClick={onClose}>
             <X size={14} /> Cancelar
           </button>
         </div>

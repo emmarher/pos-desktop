@@ -11,7 +11,8 @@
  *     - Auth:        POST /auth/login, POST /auth/refresh
  *     - Productos:   GET /products (búsqueda por nombre/código)
  *     - Clientes:    GET /customers (búsqueda)
- *     - Ventas:      POST /sales, POST /sales/:id/cancel
+ *     - Ventas:      POST /sales, GET /sales/:id, GET /sales/:id/ticket,
+ *                     GET /sales (listado), POST /sales/:id/cancel
  *     - Impresión:   POST /print-jobs, GET /print-jobs, PATCH /print-jobs/:id
  *     - Báscula:     GET /scale/current?device_id=X
  *     - QoS:         POST /service-quality/:id
@@ -27,9 +28,11 @@ import {
   PriceType,
   Product,
   ProductSearchResponse,
+  SaleDetail,
   SaleResponse,
   ScaleReading,
   ServiceQualityEvent,
+  StoredTicket,
 } from '../models';
 import {apiRequest, apiUploadFile} from './client';
 
@@ -219,7 +222,7 @@ export function getQuickStats(): Promise<QuickStats> {
   return apiRequest<QuickStats>('/reports/quick-stats');
 }
 
-/** Venta del historial (GET /reports/sales-history). */
+/** Venta del historial (GET /reports/sales-history, GET /sales). */
 export interface SaleHistoryItem {
   id: string;
   folio: string;
@@ -231,13 +234,71 @@ export interface SaleHistoryItem {
   tax: number;
   total: number;
   payment_state: string;
+  /** COMPLETED | CANCELLED | REFUNDED — necesario para tickets cancelados */
+  status: string;
   created_at: string;
 }
 
-export function getSalesHistory(): Promise<{ items: SaleHistoryItem[]; total: number }> {
+/** Parámetros de filtrado para getSalesHistory y getMyTickets. */
+export interface SalesHistoryParams {
+  from?: string;
+  to?: string;
+  seller_id?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/** GET /reports/sales-history — reportes de ventas (admin: reports:read). */
+export function getSalesHistory(
+  params?: SalesHistoryParams,
+): Promise<{ items: SaleHistoryItem[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  if (params?.seller_id) qs.set('seller_id', params.seller_id);
+  qs.set('limit', String(params?.limit ?? 20));
+  if (params?.offset) qs.set('offset', String(params.offset));
   return apiRequest<{ items: SaleHistoryItem[]; total: number }>(
-    '/reports/sales-history?limit=20',
+    `/reports/sales-history?${qs.toString()}`,
   );
+}
+
+/** GET /sales — listado de ventas (Vendedor: sales:read_own, Admin: sales:read_all). */
+export function getMyTickets(
+  params?: SalesHistoryParams,
+): Promise<{ items: SaleHistoryItem[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  if (params?.seller_id) qs.set('seller_id', params.seller_id);
+  qs.set('limit', String(params?.limit ?? 20));
+  if (params?.offset) qs.set('offset', String(params.offset));
+  return apiRequest<{ items: SaleHistoryItem[]; total: number }>(
+    `/sales?${qs.toString()}`,
+  );
+}
+
+/** GET /sales/:id — detalle de venta con ítems y pagos (sales:read_own). */
+export function getSale(id: string): Promise<SaleDetail> {
+  return apiRequest<SaleDetail>(`/sales/${encodeURIComponent(id)}`);
+}
+
+/** GET /sales/:id/ticket — contenido ESC/POS almacenado para reimprimir. */
+export function getTicketContent(saleId: string): Promise<StoredTicket> {
+  return apiRequest<StoredTicket>(`/sales/${encodeURIComponent(saleId)}/ticket`);
+}
+
+/**
+ * Reprimir un ticket: obtiene el contenido almacenado y lo encola para imprimir.
+ * El backend auto-resuelve el device con can_print (sin necesidad de pasar target_device_id).
+ */
+export async function reprintTicket(saleId: string): Promise<void> {
+  const ticket = await getTicketContent(saleId);
+  await enqueuePrintJob({
+    content: ticket.content,
+    sale_id: saleId,
+    job_type: 'SALE_TICKET',
+  });
 }
 
 /** GET /measurement-units — unidades de medida del catálogo (RF-UM). */
@@ -312,19 +373,27 @@ export function cancelSale(
 
 /* ──────────────────────────────────────────────────────────────────────
  * IMPRESIÓN DELEGADA (RF-IM)
- *   enqueuePrintJob: este dispositivo encola; el dispositivo con
- *     impresora hace polling y ejecuta (RF-IM-002).
+ *   enqueuePrintJob: este dispositivo encola; el backend auto-resuelve el
+ *     target_device_id (dispositivo con can_print=true) si no se pasa.
  *   getPendingPrintJobs: usado por el dispositivo con can_print=true
  *     (polling cada 2s).
  *   updatePrintJob: marcar COMPLETED/FAILED tras imprimir.
  * ────────────────────────────────────────────────────────────────────── */
-export function enqueuePrintJob(
-  target_device_id: string,
-  content: string,
-): Promise<PrintJob> {
+/** Entrada para encolar un trabajo de impresión (RF-IM-002). */
+export interface EnqueuePrintInput {
+  /** Si no se pasa, el backend busca el device con can_print=true del tenant. */
+  target_device_id?: string;
+  content: string;
+  job_type?: 'SALE_TICKET' | 'CUT_TICKET' | 'TEST' | 'Z_REPORT';
+  sale_id?: string | null;
+  source_device_id?: string;
+}
+
+/** Encola un trabajo de impresión (RF-IM-002). Auto-resuelve target si no se pasa. */
+export function enqueuePrintJob(input: EnqueuePrintInput): Promise<PrintJob> {
   return apiRequest<PrintJob>('/print-jobs', {
     method: 'POST',
-    body: {target_device_id, content},
+    body: input,
   });
 }
 
