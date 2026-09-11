@@ -58,10 +58,12 @@ export async function listPorts(): Promise<SerialPortInfo[]> {
   return invoke<SerialPortInfo[]>('list_ports');
 }
 
-/** Lista impresoras Windows spooler (Rust printer_usb::list_printers). */
+/** Lista impresoras Windows spooler (Rust printer_usb::list_printers). Filtra virtuales PDF/XPS. */
 export async function listPrinters(): Promise<PrinterInfo[]> {
   try {
-    return await invoke<PrinterInfo[]>('list_printers');
+    const raw = await invoke<PrinterInfo[]>('list_printers');
+    // Defensa extra en frontend (Rust ya filtra en Windows mock).
+    return raw.filter(p => !VIRTUAL_PRINTER_RE.test(p.name));
   } catch {
     return [];
   }
@@ -125,6 +127,58 @@ export async function printTicket(
 
 /** Imprime ticket por USB spooler (80mm) — WinSpool RAW. */
 export async function printTicketUsb(printerName: string, content: string): Promise<void> {
+  const b64 = btoa(unescape(encodeURIComponent(content)));
+  await printRawUsb(printerName, b64);
+}
+
+/* ── Fase 1: impresión directa USB 80mm por defecto ────────────────────── */
+
+export const STORAGE_PRINTER_USB_KEY = 'pos.hardware.usb';
+
+export interface PersistedUsbPrinter {
+  printerName: string;
+  portName?: string;
+  driverName?: string;
+}
+
+const VIRTUAL_PRINTER_RE = /microsoft print to pdf|microsoft xps|xps document writer|onenote|fax|adobe pdf|pdf24|print to pdf/i;
+
+/** Obtiene la impresora USB persistida (seleccionada en HardwareScreen). Ignora virtuales PDF. */
+export async function getPersistedUsbPrinter(): Promise<PersistedUsbPrinter | null> {
+  try {
+    const { default: AsyncStorage } = await import('../lib/storage');
+    const raw = await AsyncStorage.getItem(STORAGE_PRINTER_USB_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedUsbPrinter;
+    if (!parsed?.printerName) return null;
+    if (VIRTUAL_PRINTER_RE.test(parsed.printerName)) {
+      await AsyncStorage.removeItem(STORAGE_PRINTER_USB_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+/** Persiste la impresora USB seleccionada. */
+export async function persistUsbPrinter(info: PersistedUsbPrinter): Promise<void> {
+  const { default: AsyncStorage } = await import('../lib/storage');
+  await AsyncStorage.setItem(STORAGE_PRINTER_USB_KEY, JSON.stringify(info));
+}
+
+/**
+ * Impresión directa USB 80mm por defecto (Fase 1).
+ * Lee la impresora persistida en storage, arma base64 y llama a
+ * Rust `print_raw_usb` (que aplica build_print_sequence 48 + GS V corte).
+ * No usa cola del servidor ni orquestador.
+ */
+export async function printTicketDirect(content: string): Promise<void> {
+  const persisted = await getPersistedUsbPrinter();
+  const printerName = persisted?.printerName?.trim();
+  if (!printerName) {
+    throw new Error('Selecciona una impresora USB 80mm en Configuración → Hardware.');
+  }
   const b64 = btoa(unescape(encodeURIComponent(content)));
   await printRawUsb(printerName, b64);
 }
