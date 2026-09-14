@@ -262,7 +262,7 @@ export default function TicketsScreen({
             />
           </div>
           <button
-            className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+            className="rounded-[var(--radius-md)] bg-[var(--color-primary)]/60 px-4 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
             onClick={handleFilter}
             data-testid="btn-filter-tickets"
           >

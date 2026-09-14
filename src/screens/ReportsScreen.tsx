@@ -214,7 +214,7 @@ export default function ReportsScreen({
                   />
                 </div>
                 <button
-                  className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-3 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                  className="rounded-[var(--radius-md)] bg-[var(--color-primary)]/50 px-3 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
                   onClick={handleFilterClick}
                   data-testid="btn-filter-reports"
                 >
