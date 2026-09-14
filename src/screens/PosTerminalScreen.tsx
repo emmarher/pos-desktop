@@ -67,6 +67,13 @@ export default function PosTerminalScreen({
   const cartCount = useCartStore(s => s.items.length);
   const user = useAuthStore(s => s.user);
 
+  /* Si el carrito está vacío (0 artículos), debe permanecer minimizado (collar). */
+  useEffect(() => {
+    if (cartCount === 0 && !cartCollapsed) {
+      setCartCollapsed(true);
+    }
+  }, [cartCount, cartCollapsed]);
+
   /* device_id de la báscula si esta máquina la tiene registrada (HardwareScreen). */
   const scaleDeviceId = getScaleDeviceId() ?? undefined;
 
