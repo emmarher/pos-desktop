@@ -53,12 +53,21 @@ export default function PosTerminalScreen({
   const user = useAuthStore(s => s.user);
 
   /* Carrito: sidecar. Por defecto minimizado solo si está vacío al iniciar,
-     pero el usuario puede abrirlo/cerrarlo libremente sin flashing. */
+     pero el usuario puede abrirlo/cerrarlo libremente sin flashing.
+     Al agregar el primer producto (0 → 1) se abre automáticamente. */
   const [cartCollapsed, setCartCollapsed] = useState(() => {
     const initialCount = useCartStore.getState().items.length;
     if (initialCount === 0) return true;
     return window.innerWidth < SIDECAR_BREAKPOINT;
   });
+  const prevCartCountRef = useState(() => ({ current: useCartStore.getState().items.length }))[0];
+  useEffect(() => {
+    const prev = prevCartCountRef.current;
+    if (prev === 0 && cartCount > 0) {
+      setCartCollapsed(false);
+    }
+    prevCartCountRef.current = cartCount;
+  }, [cartCount]);
 
   /* En pantallas estrechas forzar collar; en anchas no interferir con toggle manual. */
   useEffect(() => {
