@@ -174,9 +174,9 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
     );
   }
 
-  /* ── Expandido: sidebar completo ─────────────────────────────────────── */
+  /* ── Expandido: sidebar completo (respeta BottomNavBar h-16) ───────────── */
   return (
-    <aside className="fixed top-16 bottom-0 right-0 z-40 flex w-80 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-[0_4px_12px_var(--color-shadow)]">
+    <aside className="fixed top-16 bottom-16 right-0 z-30 flex w-80 max-h-[calc(100dvh-8rem)] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-[0_4px_12px_var(--color-shadow)] sm:bottom-16 sm:max-h-[calc(100vh-8rem)] max-sm:bottom-16">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
         <button

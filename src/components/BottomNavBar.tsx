@@ -35,7 +35,7 @@ export default function BottomNavBar({
     : TABS;
 
   return (
-    <nav className="border-t border-[var(--color-border)] bg-[var(--color-surface-solid)]">
+    <nav className="relative z-40 border-t border-[var(--color-border)] bg-[var(--color-surface-solid)]">
       <div className="flex h-16 items-stretch justify-around">
         {tabs.map(tab => {
           const isActive = tab.key === active;
