@@ -10,9 +10,10 @@
  * Requiere permiso products:create (crear) o products:update (editar) —
  * el padre decide si lo muestra.
  */
-import {useCallback, useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ImagePlus, Trash2, X} from 'lucide-react';
 import type {Category, MeasurementUnit, PriceType, Product} from '../models';
+import {filterAllowedUnits, unitChipLabel} from '../constants/units';
 import {
   createProduct,
   deleteProductImage,
@@ -261,7 +262,9 @@ export default function ProductFormSheet({
     }
   };
 
-  const selectedSaleUnit = units.find(u => u.id === saleUnitId);
+  // PR-1: solo Pieza (piece) y Kilo (kg, 3 decimales = 0.500). El resto queda deshabilitado en BD (PR-2).
+  const allowedUnits = useMemo(() => filterAllowedUnits(units), [units]);
+  const selectedSaleUnit = units.find(u => u.id === saleUnitId) ?? allowedUnits.find(u => u.id === saleUnitId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
@@ -375,28 +378,34 @@ export default function ProductFormSheet({
             ))}
           </div>
 
-          {/* Unidades */}
+          {/* Unidades — PR-1: solo Pieza (pz) y Kilo (kg, 0.500) */}
           <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-            Unidad base / venta *
+            Unidad base / venta * <span className="font-normal text-[var(--color-text-secondary)]">(Pieza · Kilo)</span>
           </label>
           <div className={`flex flex-wrap gap-2 ${errors.units ? 'rounded-[var(--radius-md)] border border-[var(--color-danger)] p-2' : ''}`}>
-            {units.map(u => (
-              <button
-                key={u.id}
-                className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
-                  baseUnitId === u.id
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
-                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
-                }`}
-                onClick={() => {
-                  setBaseUnitId(u.id);
-                  setSaleUnitId(u.id);
-                }}
-                data-testid={`pf-unit-${u.code}`}
-              >
-                {u.name}
-              </button>
-            ))}
+            {allowedUnits.length === 0 ? (
+              <p className="w-full py-2 text-center text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                Cargando unidades…
+              </p>
+            ) : (
+              allowedUnits.map(u => (
+                <button
+                  key={u.id}
+                  className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
+                    baseUnitId === u.id
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
+                  }`}
+                  onClick={() => {
+                    setBaseUnitId(u.id);
+                    setSaleUnitId(u.id);
+                  }}
+                  data-testid={`pf-unit-${u.code}`}
+                >
+                  {unitChipLabel(u.code, u.name)}
+                </button>
+              ))
+            )}
           </div>
           {errors.units && <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{errors.units}</p>}
 
