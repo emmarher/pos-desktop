@@ -53,8 +53,7 @@ export default function ProductFormSheet({
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [baseUnitId, setBaseUnitId] = useState<string | null>(null);
   const [saleUnitId, setSaleUnitId] = useState<string | null>(null);
-  const [price, setPrice] = useState('');
-  const [cost, setCost] = useState('');
+  // 3 precios manuales obligatorios: Público (RETAIL), Mayoreo (WHOLESALE), Especial (SPECIAL). Sin Costo, sin duplicado price top-level.
   const [stock, setStock] = useState('');
   const [minStock, setMinStock] = useState('');
   const [pricesByType, setPricesByType] = useState<Record<string, string>>({});
@@ -85,7 +84,7 @@ export default function ProductFormSheet({
     setPriceTypes(pts);
   }, []);
 
-  /* Prefill al abrir: crear → defaults; editar → desde el producto */
+  /* Prefill al abrir: crear → defaults; editar → desde el producto (precios manuales) */
   useEffect(() => {
     void loadOptions();
     if (mode === 'edit' && initial) {
@@ -93,8 +92,6 @@ export default function ProductFormSheet({
       setCategoryId(initial.category_id ?? null);
       setBaseUnitId(initial.base_unit_id);
       setSaleUnitId(initial.sale_unit_id);
-      setPrice(initial.price ? String(initial.price) : '');
-      setCost(initial.cost ? String(initial.cost) : '');
       setStock(initial.stock ? String(initial.stock) : '');
       setMinStock(initial.min_stock ? String(initial.min_stock) : '');
       setIsScale(initial.is_scale_enabled ?? false);
@@ -103,6 +100,9 @@ export default function ProductFormSheet({
         const map: Record<string, string> = {};
         for (const p of initial.prices) map[p.price_type_id] = String(p.price);
         setPricesByType(map);
+      } else {
+        // Fallback: si no hay prices[] (producto viejo), hidratar RETAIL con price
+        setPricesByType({});
       }
       /* Imagen existente (solo preview; sin archivo local). */
       setImageFile(null);
@@ -113,8 +113,6 @@ export default function ProductFormSheet({
       setCategoryId(null);
       setBaseUnitId(null);
       setSaleUnitId(null);
-      setPrice('');
-      setCost('');
       setStock('');
       setMinStock('');
       setPricesByType({});
@@ -163,25 +161,25 @@ export default function ProductFormSheet({
     setImagePreview(null);
   };
 
-  /* Prefill de precios por tipo cuando se escribe el precio base */
-  const handlePriceChange = (value: string) => {
-    setPrice(value);
-    const num = parseFloat(value);
-    if (!Number.isFinite(num) || num <= 0) return;
-    const next: Record<string, string> = {};
-    for (const pt of priceTypes) {
-      if (pt.code === 'RETAIL') next[pt.id] = value;
-      else if (pt.code === 'WHOLESALE') next[pt.id] = (num * 0.9).toFixed(2);
-      else if (pt.code === 'SPECIAL') next[pt.id] = (num * 1.15).toFixed(2);
-    }
-    setPricesByType(prev => ({...next, ...prev}));
-  };
-
   const handleSubmit = async () => {
-    // Validación inline: setea errores por campo y notifica sin window.alert.
+    // Validación inline: 3 precios manuales obligatorios, sin duplicado, sin Costo.
     const e: Record<string, string> = {};
     if (!name.trim()) e.name = 'El nombre es obligatorio.';
     if (!baseUnitId || !saleUnitId) e.units = 'Selecciona las unidades base y de venta.';
+    // 3 tipos fijos obligatorios: RETAIL (Público), WHOLESALE (Mayoreo), SPECIAL (Especial)
+    const requiredCodes: Array<'RETAIL' | 'WHOLESALE' | 'SPECIAL'> = ['RETAIL', 'WHOLESALE', 'SPECIAL'];
+    for (const code of requiredCodes) {
+      const pt = priceTypes.find(p => p.code === code);
+      if (!pt) {
+        e[`price_${code}`] = 'Tipo de precio no disponible.';
+        continue;
+      }
+      const raw = (pricesByType[pt.id] ?? '').trim();
+      const v = parseFloat(raw);
+      if (!raw || !Number.isFinite(v) || v <= 0) {
+        e[`price_${code}`] = `El precio ${pt.name} es obligatorio y debe ser > 0.`;
+      }
+    }
     setErrors(e);
     if (Object.keys(e).length > 0) return;
 
@@ -190,11 +188,12 @@ export default function ProductFormSheet({
       return Number.isFinite(v) ? v : undefined;
     };
 
+    // Payload con 3 precios manuales. price (fallback) = RETAIL manual, cost omitido (BD default 0, sin migración).
+    const retailId = priceTypes.find(p => p.code === 'RETAIL')?.id;
+    const retailPrice = retailId ? parseFloat(pricesByType[retailId] ?? '0') : 0;
+    const requiredSet = new Set<string>(requiredCodes);
     const prices = priceTypes
-      .filter(pt => {
-        const v = parseFloat(pricesByType[pt.id] ?? '');
-        return Number.isFinite(v) && v > 0;
-      })
+      .filter(pt => requiredSet.has(pt.code as string))
       .map(pt => ({
         price_type_id: pt.id,
         price: parseFloat(pricesByType[pt.id]!),
@@ -206,12 +205,11 @@ export default function ProductFormSheet({
       category_id: categoryId,
       base_unit_id: baseUnitId!, // validado arriba: no es null en este punto.
       sale_unit_id: saleUnitId!,
-      price: num(price),
-      cost: num(cost),
+      price: retailPrice, // fallback para loadPrices, no input duplicado
       min_stock: num(minStock),
       is_scale_enabled: isScale,
       allow_fractional_sale: allowFractional,
-      prices: prices.length > 0 ? prices : undefined,
+      prices,
     };
 
     setSubmitting(true);
@@ -409,32 +407,46 @@ export default function ProductFormSheet({
           </div>
           {errors.units && <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{errors.units}</p>}
 
-          {/* Precio / costo */}
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                Precio (Público)
-              </label>
-              <input
-                className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
-                placeholder="0.00"
-                value={price}
-                onChange={e => handlePriceChange(e.target.value)}
-                data-testid="pf-price"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                Costo
-              </label>
-              <input
-                className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
-                placeholder="0.00"
-                value={cost}
-                onChange={e => setCost(e.target.value)}
-                data-testid="pf-cost"
-              />
-            </div>
+          {/* Precios — 3 tipos manuales obligatorios, sin Costo, sin duplicado */}
+          <div className="mt-3">
+            <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+              Precios * <span className="font-normal">(Público · Mayoreo · Especial)</span>
+            </label>
+            {priceTypes.length === 0 ? (
+              <p className="py-2 text-center text-[var(--font-small)] text-[var(--color-text-secondary)]">Cargando tipos de precio…</p>
+            ) : (
+              (['RETAIL', 'WHOLESALE', 'SPECIAL'] as const).map(code => {
+                const pt = priceTypes.find(p => p.code === code);
+                if (!pt) return null;
+                const err = errors[`price_${code}`];
+                return (
+                  <div key={pt.id} className="mb-2">
+                    <label className="mb-1 block text-[var(--font-micro)] font-medium text-[var(--color-text-secondary)]">
+                      {pt.name} *
+                    </label>
+                    <input
+                      className={`w-full rounded-[var(--radius-md)] border px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none ${
+                        err ? 'border-[var(--color-danger)] bg-[var(--color-danger-soft)]/50' : 'border-[var(--color-border)] bg-[var(--color-input)]'
+                      }`}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                      value={pricesByType[pt.id] ?? ''}
+                      onChange={e => {
+                        const v = e.target.value.replace(/[^0-9.]/g, '');
+                        setPricesByType(prev => ({...prev, [pt.id]: v}));
+                        if (err) setErrors(prev => {
+                          const n = {...prev};
+                          delete n[`price_${code}`];
+                          return n;
+                        });
+                      }}
+                      data-testid={`pf-price-${pt.code}`}
+                    />
+                    {err && <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{err}</p>}
+                  </div>
+                );
+              })
+            )}
           </div>
 
           {/* Stock tabular */}
@@ -465,28 +477,7 @@ export default function ProductFormSheet({
             </div>
           </div>
 
-          {/* Precios por tipo */}
-          {priceTypes.length > 1 && (
-            <>
-              <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                Precios por tipo
-              </label>
-              {priceTypes.map(pt => (
-                <div key={pt.id} className="mb-2">
-                  <label className="mb-1 block text-[var(--font-micro)] font-medium text-[var(--color-text-secondary)]">
-                    {pt.name}
-                  </label>
-                  <input
-                    className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
-                    placeholder={pt.code === 'WHOLESALE' ? 'x0.9' : pt.code === 'SPECIAL' ? 'x1.15' : '0.00'}
-                    value={pricesByType[pt.id] ?? ''}
-                    onChange={e => setPricesByType(prev => ({...prev, [pt.id]: e.target.value}))}
-                    data-testid={`pf-price-${pt.code}`}
-                  />
-                </div>
-              ))}
-            </>
-          )}
+
 
           {/* Flags */}
           <div className="mt-3 flex items-center justify-between">
