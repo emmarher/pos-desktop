@@ -12,7 +12,34 @@ import ConnectionScreen from '../screens/ConnectionScreen';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import HardwareScreen from '../screens/HardwareScreen';
+import LicenseActivation from '../screens/LicenseActivation';
 import ToastContainer from '../components/ToastContainer';
+
+/* Probe bootstrap: si licenseState es unknown, consulta al server para decidir wizard vs conexión */
+import { useEffect, useRef } from 'react';
+import { apiRequest, ApiError } from '../api/client';
+
+function useBootstrapLicenseProbe() {
+  const licenseState = useAuthStore(s => s.licenseState);
+  const probed = useRef(false);
+  useEffect(() => {
+    if (licenseState !== 'unknown' || probed.current) return;
+    probed.current = true;
+    (async () => {
+      try {
+        await apiRequest('/license/status', { method: 'GET', auth: false });
+        useAuthStore.setState({ licenseState: 'active' as const });
+      } catch (e) {
+        if (e instanceof ApiError && (e.code === 'NO_LICENSE' || e.status === 404)) {
+          useAuthStore.setState({ licenseState: 'expired' as const });
+        } else {
+          // Sin servidor o error de red → no bloquear login; dejar en active para que el usuario pueda intentar conectar
+          // El wizard interno reintentará cuando haya conexión
+        }
+      }
+    })();
+  }, [licenseState]);
+}
 
 /* ── Placeholder temporal (se reemplazan en F4 las pantallas restantes) ── */
 function Placeholder({title}: {title: string}) {
@@ -29,6 +56,7 @@ function Placeholder({title}: {title: string}) {
 }
 
 export default function AppRoutes() {
+  useBootstrapLicenseProbe();
   const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const licenseState = useAuthStore(state => state.licenseState);
 
@@ -36,9 +64,17 @@ export default function AppRoutes() {
     return (
       <>
         <Routes>
-          <Route path="*" element={<Placeholder title="Licencia vencida" />} />
+          <Route
+            path="*"
+            element={
+              <LicenseActivation
+                onActivated={() => {
+                  // El wizard ya puso licenseState='active'; el router re-evalúa en próximo render
+                }}
+              />
+            }
+          />
         </Routes>
-        {/* ToastContainer global: captura notificaciones sin window.alert. */}
         <ToastContainer />
       </>
     );
