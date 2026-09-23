@@ -13,6 +13,10 @@
  *
  * UX optimizada (AGENTS.md): feedback inmediato, drag highlight, disabled durante envío,
  * errores no bloqueantes, sin re-renders extra (local state memoizado), sin crasheo en I/O.
+ *
+ * NOTA PROD: el botón "Probar 1 día gratis" solo existe en dev
+ * (`import.meta.env.DEV`). En builds productivas solo se admite activación
+ * con .lic del proveedor (decisión de producto: sin trial en prod).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -245,14 +249,17 @@ export default function LicenseActivation({ onActivated }: { onActivated?: () =>
           >
             {statusKind === 'loading' ? 'Activando…' : 'Activar licencia'}
           </button>
-          <button
-            type="button"
-            onClick={handleTrial}
-            disabled={statusKind === 'loading'}
-            className="rounded-lg border border-white/15 bg-white/5 text-white px-4 py-2.5 text-sm font-medium hover:bg-white/10 disabled:opacity-50"
-          >
-            Probar 1 día gratis
-          </button>
+          {/* Trial solo en dev: en prod el wizard solo acepta .lic del proveedor. */}
+          {!import.meta.env.PROD && (
+            <button
+              type="button"
+              onClick={handleTrial}
+              disabled={statusKind === 'loading'}
+              className="rounded-lg border border-white/15 bg-white/5 text-white px-4 py-2.5 text-sm font-medium hover:bg-white/10 disabled:opacity-50"
+            >
+              Probar 1 día gratis
+            </button>
+          )}
         </div>
 
         {/* Estado */}
@@ -266,7 +273,8 @@ export default function LicenseActivation({ onActivated }: { onActivated?: () =>
         )}
 
         <p className="mt-4 text-[11px] leading-4 text-[var(--color-text-secondary)]">
-          La licencia .lic es un archivo firmado Ed25519 (payload + firma). Si necesitas renovar, ampliar asientos o renovar tras 1 día, tu proveedor te emitirá un nuevo .lic. El trial usa una familia de claves aislada y no afecta licencias productivas.
+          La licencia .lic es un archivo firmado Ed25519 (payload + firma). Si necesitas renovar o ampliar asientos, tu proveedor te emitirá un nuevo .lic.
+          {!import.meta.env.PROD && ' El trial usa una familia de claves aislada y no afecta licencias productivas.'}
         </p>
       </div>
     </div>

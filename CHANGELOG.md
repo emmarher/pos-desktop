@@ -5,6 +5,16 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — F-I1 installer: trial solo en dev (rama installer)
+
+### Cambiado
+
+- **`LicenseActivation`**: el botón "Probar 1 día gratis" y su texto solo se
+  renderizan cuando `!import.meta.env.PROD` (decisión: sin trial en prod; en
+  producción el wizard solo acepta `.lic` del proveedor).
+- Agregado el `src/vite-env.d.ts` estándar (`/// <reference types="vite/client" />`)
+  que faltaba — sin él, `import.meta.env` no tipaba y `tsc` fallaba.
+
 ## [Sin publicar] — Fix reimpresión de tickets
 
 ### Corregido
