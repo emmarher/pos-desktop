@@ -176,8 +176,14 @@ export default function TicketsScreen({
 
   const handleReprint = async (saleId: string) => {
     try {
-      await reprintTicket(saleId);
-      toast.success('Ticket encolado para impresión.');
+      // 'printed' = salió directo por USB local; 'queued' = delegado a la
+      // cola del servidor (requiere el orquestador en el equipo con impresora).
+      const outcome = await reprintTicket(saleId);
+      toast.success(
+        outcome === 'printed'
+          ? 'Ticket reimpreso (80mm).'
+          : 'Ticket encolado para impresión.',
+      );
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : String(err);
       toast.error(`No se pudo reimprimir: ${msg}`);

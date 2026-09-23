@@ -5,6 +5,20 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Fix reimpresión de tickets
+
+### Corregido
+
+- **Reimprimir desde Tickets ahora sí imprime**: `reprintTicket` intentaba solo
+  encolar (`POST /print-jobs`), pero el consumidor de la cola (orquestador Rust
+  `start_hardware`) no corre en desktop — `startHardware` no tiene ningún
+  llamador en la UI — así que todo quedaba en PENDING y solo se veía el toast
+  "encolado". Ahora intenta primero impresión **directa USB** (mismo camino
+  probado de `CartSheet` al vender) y solo delega a la cola cuando el equipo no
+  tiene impresora local configurada (evita duplicados: con impresora local, un
+  fallo se propaga como error en vez de encolar copia). El toast distingue:
+  "Ticket reimpreso (80mm)." vs "Ticket encolado para impresión.".
+
 ## [Sin publicar] — Integración Licencia (rama printer, merge origin/printer 721c826)
 
 ### Añadido (del remoto)

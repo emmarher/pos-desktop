@@ -292,16 +292,34 @@ export function getTicketContent(saleId: string): Promise<StoredTicket> {
 }
 
 /**
- * Reprimir un ticket: obtiene el contenido almacenado y lo encola para imprimir.
- * El backend auto-resuelve el device con can_print (sin necesidad de pasar target_device_id).
+ * Reprimir un ticket: obtiene el contenido almacenado y lo imprime.
+ *
+ * Intenta primero impresión DIRECTA USB (mismo camino que usa CartSheet al
+ * vender: `printTicketDirect`). La cola del servidor (`POST /print-jobs`) solo
+ * se usa como fallback cuando este equipo NO tiene impresora local, porque el
+ * consumidor de la cola (orquestador Rust `start_hardware`) no corre por
+ * defecto en desktop — sin él, todo lo encolado queda en PENDING para siempre.
+ *
+ * @returns 'printed' si salió por la impresora local, 'queued' si se delegó.
  */
-export async function reprintTicket(saleId: string): Promise<void> {
+export async function reprintTicket(saleId: string): Promise<'printed' | 'queued'> {
   const ticket = await getTicketContent(saleId);
+  // Import dinámico para no crear ciclo: services/hardware no importa este módulo.
+  const {printTicketDirect, getPersistedUsbPrinter} = await import('../services/hardware');
+  const printer = await getPersistedUsbPrinter();
+  if (printer?.printerName) {
+    // Hay impresora local: imprimir directo. Si falla, el error se propaga
+    // (sin encolar duplicado: el usuario reintenta desde Tickets).
+    await printTicketDirect(ticket.content);
+    return 'printed';
+  }
+  // Sin impresora local: delegar al dispositivo con can_print vía cola.
   await enqueuePrintJob({
     content: ticket.content,
     sale_id: saleId,
     job_type: 'SALE_TICKET',
   });
+  return 'queued';
 }
 
 /** GET /measurement-units — unidades de medida del catálogo (RF-UM). */
