@@ -34,7 +34,7 @@ import {
   ServiceQualityEvent,
   StoredTicket,
 } from '../models';
-import {apiRequest, apiUploadFile} from './client';
+import {apiRequest, apiUploadFile, ApiError} from './client';
 
 /* ──────────────────────────────────────────────────────────────────────
  * AUTH Y LICENCIA
@@ -54,8 +54,38 @@ export function login(body: LoginRequest): Promise<AuthResponse> {
   return apiRequest<AuthResponse>('/auth/login', {
     method: 'POST',
     body,
-    auth: false, // aún no hay token
+    auth: false, // a�n no hay token
   });
+}
+
+/**
+ * POST /auth/change-pin — cambia el PIN inicial (F-I2b instalador).
+ * Sin JWT a propósito: se usa cuando /auth/login responde 403 MUST_CHANGE_PIN.
+ * No emite tokens; el caller reintenta login con el PIN nuevo.
+ */
+export function changePin(body: {
+  tenant_code: string;
+  pin: string;
+  new_pin: string;
+}): Promise<{changed: boolean}> {
+  return apiRequest<{changed: boolean}>('/auth/change-pin', {
+    method: 'POST',
+    body,
+    auth: false,
+  });
+}
+
+/**
+ * Detecta el 403 MUST_CHANGE_PIN del login. El envoltorio de error no trae
+ * `code` máquina (solo statusCode+message), así que se matchea por status
+ * más el mensaje estable del servidor ('Debes cambiar tu PIN inicial…').
+ */
+export function isMustChangePin(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 403 &&
+    /cambiar tu PIN|MUST_CHANGE_PIN/i.test(err.message)
+  );
 }
 
 /* ──────────────────────────────────────────────────────────────────────

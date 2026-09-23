@@ -5,6 +5,17 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — F-I2b installer: cambio de PIN forzado en login (rama installer)
+
+### Añadido
+
+- **`LoginScreen`**: ante 403 de PIN inicial muestra el panel "Crea tu PIN nuevo"
+  (nuevo + confirmación, solo dígitos, 4-6) y botón "Guardar PIN y entrar":
+  llama a `POST /auth/change-pin` y reintenta login solo. Sin duplicar sesión.
+- **`api/endpoints`**: `changePin()` + `isMustChangePin()` (el envoltorio de error
+  no trae `code` máquina —se detecta por status 403 + mensaje estable—,
+  documentado inline).
+
 ## [Sin publicar] — F-I1 installer: trial solo en dev (rama installer)
 
 ### Cambiado

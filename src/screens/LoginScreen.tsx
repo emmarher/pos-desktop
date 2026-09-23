@@ -8,7 +8,7 @@
 import {useCallback, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {useAuthStore} from '../stores/auth.store';
-import {login} from '../api/endpoints';
+import {changePin, isMustChangePin, login} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {getOrCreateDeviceId, getDeviceName, getDeviceType} from '../lib/platform';
 import GlassBackground from '../components/GlassBackground';
@@ -23,6 +23,10 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Modo cambio de PIN inicial (F-I2b): el server respondió 403 MUST_CHANGE_PIN.
+  const [pinChange, setPinChange] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   const handleLogin = useCallback(async () => {
     if (!tenantCode.trim() || !pin.trim()) {
@@ -44,6 +48,12 @@ export default function LoginScreen() {
       await setSession(auth);
       navigate('/', {replace: true});
     } catch (err) {
+      // PIN inicial (seed 1234/5678): entrar en modo cambio en vez de error seco.
+      if (isMustChangePin(err)) {
+        setPinChange(true);
+        setError('Tu PIN es inicial y debe cambiarse antes de operar.');
+        return;
+      }
       setError(
         err instanceof ApiError
           ? err.message
@@ -53,6 +63,55 @@ export default function LoginScreen() {
       setLoading(false);
     }
   }, [tenantCode, pin, navigate, setSession]);
+
+  const handleChangePin = useCallback(async () => {
+    const pinRe = /^[0-9]{4,6}$/;
+    if (!pinRe.test(newPin)) {
+      setError('El PIN nuevo debe tener 4 a 6 dígitos.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      setError('La confirmación no coincide con el PIN nuevo.');
+      return;
+    }
+    if (newPin === pin) {
+      setError('El PIN nuevo debe ser distinto del actual.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await changePin({
+        tenant_code: tenantCode.trim(),
+        pin: pin.trim(),
+        new_pin: newPin,
+      });
+      // PIN actualizado: salir del modo cambio y reintentar login solo.
+      setPin(newPin);
+      setNewPin('');
+      setConfirmPin('');
+      setPinChange(false);
+      setError('PIN actualizado. Validando acceso…');
+      const deviceId = await getOrCreateDeviceId();
+      const auth = await login({
+        tenant_code: tenantCode.trim(),
+        pin: newPin,
+        device_id: deviceId,
+        device_name: getDeviceName(),
+        device_type: getDeviceType(),
+      });
+      await setSession(auth);
+      navigate('/', {replace: true});
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : 'No se pudo cambiar el PIN.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [tenantCode, pin, newPin, confirmPin, navigate, setSession]);
 
   return (
     <GlassBackground>
@@ -103,6 +162,41 @@ export default function LoginScreen() {
               <p className="mb-3 text-center text-[var(--font-small)] font-medium text-[var(--color-danger)]">
                 {error}
               </p>
+            )}
+
+            {/* Cambio de PIN inicial obligatorio (F-I2b instalador) */}
+            {pinChange && (
+              <div className="mb-4 rounded-[var(--radius-md)] border border-[var(--color-warning,#b45309)]/40 p-3">
+                <p className="mb-2 text-[var(--font-small)] font-semibold text-[var(--color-text)]">
+                  Crea tu PIN nuevo (4-6 dígitos)
+                </p>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  className="mb-2 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] p-3 text-[var(--color-text)] outline-none"
+                  placeholder="PIN nuevo"
+                  value={newPin}
+                  onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  data-testid="input-new-pin"
+                />
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  className="mb-2 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] p-3 text-[var(--color-text)] outline-none"
+                  placeholder="Confirmar PIN nuevo"
+                  value={confirmPin}
+                  onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  maxLength={6}
+                  data-testid="input-confirm-pin"
+                />
+                <POSButton
+                  title={loading ? 'Guardando…' : 'Guardar PIN y entrar'}
+                  onPress={handleChangePin}
+                  loading={loading}
+                  data-testid="btn-save-pin"
+                />
+              </div>
             )}
 
             {/* Acción principal: "Autenticar →" */}
