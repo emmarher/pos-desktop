@@ -38,15 +38,38 @@ export default function PosTerminalScreen({
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  /* Carrito: sidecar persistente en pantallas anchas; FAB + collar en estrechas. */
-  const [cartCollapsed, setCartCollapsed] = useState(false);
   /* Detectar ancho de ventana para modo sidecar (wide) vs FAB (narrow). */
   const SIDECAR_BREAKPOINT = 768; /* >=768px → sidecar; <768px → FAB */
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
   const isWideScreen = windowWidth >= SIDECAR_BREAKPOINT;
 
-  /* En pantallas estrechas, el carrito comienza minimizado (collar) hasta que
-     el usuario lo abre con el FAB. */
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const cartCount = useCartStore(s => s.items.length);
+  const user = useAuthStore(s => s.user);
+
+  /* Carrito: sidecar. Por defecto minimizado solo si está vacío al iniciar,
+     pero el usuario puede abrirlo/cerrarlo libremente sin flashing.
+     Al agregar el primer producto (0 → 1) se abre automáticamente. */
+  const [cartCollapsed, setCartCollapsed] = useState(() => {
+    const initialCount = useCartStore.getState().items.length;
+    if (initialCount === 0) return true;
+    return window.innerWidth < SIDECAR_BREAKPOINT;
+  });
+  const prevCartCountRef = useState(() => ({ current: useCartStore.getState().items.length }))[0];
+  useEffect(() => {
+    const prev = prevCartCountRef.current;
+    if (prev === 0 && cartCount > 0) {
+      setCartCollapsed(false);
+    }
+    prevCartCountRef.current = cartCount;
+  }, [cartCount]);
+
+  /* En pantallas estrechas forzar collar; en anchas no interferir con toggle manual. */
   useEffect(() => {
     if (!isWideScreen) setCartCollapsed(true);
   }, [isWideScreen]);
@@ -57,15 +80,6 @@ export default function PosTerminalScreen({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const cartCount = useCartStore(s => s.items.length);
-  const user = useAuthStore(s => s.user);
 
   /* device_id de la báscula si esta máquina la tiene registrada (HardwareScreen). */
   const scaleDeviceId = getScaleDeviceId() ?? undefined;

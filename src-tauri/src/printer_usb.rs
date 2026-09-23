@@ -117,6 +117,11 @@ fn list_printers_windows() -> Result<Vec<PrinterInfo>, String> {
                 Some(info.pPortName.to_string().unwrap_or_default())
             }
         };
+        // Filtrar virtuales PDF/XPS/Fax — pero NUNCA filtrar USB001 real (puerto físico 80mm).
+        let is_usb001 = port.as_deref().map(|p| p.eq_ignore_ascii_case("USB001")).unwrap_or(false);
+        if !is_usb001 && is_virtual_printer(&name) {
+            continue;
+        }
         // PRINTER_INFO_2W.Status bit 0x00000002 = offline? Usamos is_online = true por defecto.
         out.push(PrinterInfo {
             name,
@@ -126,6 +131,19 @@ fn list_printers_windows() -> Result<Vec<PrinterInfo>, String> {
         });
     }
     Ok(out)
+}
+
+/// Retorna true si la impresora es virtual (PDF/XPS/Fax) y no debe usarse como 80mm directa.
+fn is_virtual_printer(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    lower.contains("microsoft print to pdf")
+        || lower.contains("microsoft xps")
+        || lower.contains("xps document writer")
+        || lower.contains("onenote")
+        || lower.contains("fax")
+        || lower.contains("adobe pdf")
+        || lower.contains("pdf24")
+        || (lower.contains("print to pdf") && !lower.contains("80mm") && !lower.contains("thermal"))
 }
 
 // ---------------------------------------------------------------------------
@@ -167,12 +185,12 @@ pub fn send_raw(printer_name: &str, data: &[u8]) -> Result<(), String> {
 
 #[cfg(target_os = "windows")]
 fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
-    use windows::core::w;
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Graphics::Printing::{
         ClosePrinter, EndDocPrinter, EndPagePrinter, OpenPrinterW, StartDocPrinterW,
         StartPagePrinter, WritePrinter, DOC_INFO_1W,
     };
-    use windows::Win32::Foundation::HANDLE;
 
     let wide_name: Vec<u16> = printer_name.encode_utf16().chain(std::iter::once(0)).collect();
     let mut handle = HANDLE::default();
@@ -189,28 +207,35 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
     }
     let _guard = Guard(handle);
 
-    let doc_name: Vec<u16> = "POS Ticket\0".encode_utf16().collect();
+    let mut doc_name: Vec<u16> = "POS Ticket\0".encode_utf16().collect();
     // RAW = pasar bytes tal cual al driver (ESC/POS). Sin conversión.
-    let data_type: Vec<u16> = "RAW\0".encode_utf16().collect();
+    let mut data_type: Vec<u16> = "RAW\0".encode_utf16().collect();
     let doc_info = DOC_INFO_1W {
-        pDocName: PCWSTR(doc_name.as_ptr()),
-        pOutputFile: PCWSTR::null(),
-        pDatatype: PCWSTR(data_type.as_ptr()),
+        pDocName: PWSTR(doc_name.as_mut_ptr()),
+        pOutputFile: PWSTR::null(),
+        pDatatype: PWSTR(data_type.as_mut_ptr()),
     };
     let job_id = unsafe { StartDocPrinterW(handle, 1, &doc_info) };
     if job_id == 0 {
         return Err(format!("StartDocPrinterW falló (job 0) para \"{printer_name}\""));
     }
-    if unsafe { StartPagePrinter(handle) }.is_err() {
+    if !unsafe { StartPagePrinter(handle) }.as_bool() {
         unsafe { let _ = EndDocPrinter(handle); }
         return Err("StartPagePrinter falló".to_string());
     }
     let mut written: u32 = 0;
-    let ok = unsafe { WritePrinter(handle, data, &mut written, None) };
+    let ok = unsafe {
+        WritePrinter(
+            handle,
+            data.as_ptr() as *const core::ffi::c_void,
+            data.len() as u32,
+            &mut written,
+        )
+    };
     // Siempre cerrar page/doc incluso si WritePrinter falla
     unsafe { let _ = EndPagePrinter(handle); }
     unsafe { let _ = EndDocPrinter(handle); }
-    if ok.is_err() {
+    if !ok.as_bool() {
         return Err(format!("WritePrinter falló: {ok:?}"));
     }
     if written as usize != data.len() {

@@ -239,11 +239,12 @@ export interface SaleHistoryItem {
   created_at: string;
 }
 
-/** Parámetros de filtrado para getSalesHistory y getMyTickets. */
+/** Parámetros de filtrado para getSalesHistory y getMyTickets (folio = V-00000x prefijo). */
 export interface SalesHistoryParams {
   from?: string;
   to?: string;
   seller_id?: string;
+  folio?: string;
   limit?: number;
   offset?: number;
 }
@@ -256,6 +257,7 @@ export function getSalesHistory(
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   if (params?.seller_id) qs.set('seller_id', params.seller_id);
+  if (params?.folio?.trim()) qs.set('folio', params.folio.trim());
   qs.set('limit', String(params?.limit ?? 20));
   if (params?.offset) qs.set('offset', String(params.offset));
   return apiRequest<{ items: SaleHistoryItem[]; total: number }>(
@@ -263,7 +265,7 @@ export function getSalesHistory(
   );
 }
 
-/** GET /sales — listado de ventas (Vendedor: sales:read_own, Admin: sales:read_all). */
+/** GET /sales — listado de ventas (Vendedor: sales:read_own, Admin: sales:read_all). Soporta folio V-00000x. */
 export function getMyTickets(
   params?: SalesHistoryParams,
 ): Promise<{ items: SaleHistoryItem[]; total: number }> {
@@ -271,6 +273,7 @@ export function getMyTickets(
   if (params?.from) qs.set('from', params.from);
   if (params?.to) qs.set('to', params.to);
   if (params?.seller_id) qs.set('seller_id', params.seller_id);
+  if (params?.folio?.trim()) qs.set('folio', params.folio.trim());
   qs.set('limit', String(params?.limit ?? 20));
   if (params?.offset) qs.set('offset', String(params.offset));
   return apiRequest<{ items: SaleHistoryItem[]; total: number }>(

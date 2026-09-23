@@ -1,12 +1,12 @@
 /**
- * components/CartSheet.tsx — Carrito lateral persistente (RF-VE-001..005).
+ * components/CartSheet.tsx — Carrito lateral persistente (RF-VE-001..005) + impresión directa USB 80mm.
  *
  * Sidecar fijo en el lado derecho de la Terminal de ventas. Siempre visible
  * (con opción de minimizar/expandir) durante la venta. Muestra ítems
  * (desglose), método de pago, totales y confirma POST /sales (vía Rust).
  *
  * Tras vender, notifica onSaleDone con los items vendidos para actualizar
- * el stock local del grid de productos.
+ * el stock local del grid y dispara impresión directa 80mm si hay impresora USB configurada.
  */
 import {useEffect, useState} from 'react';
 import {X, ShoppingCart, ChevronLeft, ChevronRight} from 'lucide-react';
@@ -17,6 +17,9 @@ import {ApiError} from '../api/client';
 import {toast} from '../hooks/useToast';
 import POSButton from './POSButton';
 import {formatWeightKg} from '../lib/scale';
+import {buildTicket80mm} from '../lib/ticket';
+import {printTicketDirect, getPersistedUsbPrinter} from '../services/hardware';
+import {useAuthStore} from '../stores/auth.store';
 
 interface CartSheetProps {
   /** Si está minimizado, muestra solo el header delgado */
@@ -65,15 +68,81 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
     if (remaining > 0) {
       addPayment({method, amount: remaining});
     }
+    // Snapshot para ticket 80mm directo y para stock local (antes de limpiar)
+    const snapshotItems = [...items];
+    const snapshotSubtotal = subtotal;
+    const snapshotDiscount = discount;
+    const snapshotTotal = total;
+    const snapshotPayments =
+      payments.length > 0 ? [...payments] : [{method, amount: total} as typeof payments[number]];
+
+    const tenant = useAuthStore.getState().tenant;
+    const user = useAuthStore.getState().user;
+
     setSubmitting(true);
     try {
       const payload = buildSalePayload();
       const sale = await createSale(payload);
-      // Capturar items ANTES de limpiar el carrito (para stock local)
-      const soldItems = [...items];
+      const folio = sale.folio ?? 'V-?';
+
+      // Impresión directa USB 80mm por defecto (Fase 1) — best-effort
+      // Fallback: si no hay impresora persistida, intenta auto-detectar la térmica 80mm
+      let printed = false;
+      let persisted = await getPersistedUsbPrinter();
+      if (!persisted?.printerName) {
+        try {
+          const { listPrinters, persistUsbPrinter } = await import('../services/hardware');
+          const list = await listPrinters();
+          if (list.length > 0) {
+            const pref = list.find(l => /80mm|thermal|pos|receipt/i.test(l.name)) ?? list[0];
+            if (pref) {
+              await persistUsbPrinter({
+                printerName: pref.name,
+                portName: pref.portName,
+                driverName: pref.driverName,
+              });
+              persisted = { printerName: pref.name, portName: pref.portName, driverName: pref.driverName };
+            }
+          }
+        } catch {
+          /* sin impresoras disponibles -> mensaje de Hardware */
+        }
+      }
+      if (persisted?.printerName) {
+        try {
+          const ticket = buildTicket80mm({
+            businessName: tenant?.business_name ?? 'PUNTO DE VENTA',
+            businessAddress: tenant?.address ?? null,
+            businessPhone: tenant?.phone ?? null,
+            folio,
+            createdAt: (sale as unknown as {created_at?: string})?.created_at,
+            cashierName: user?.name ?? null,
+            items: snapshotItems,
+            subtotal: snapshotSubtotal,
+            discount: snapshotDiscount,
+            total: snapshotTotal,
+            payments: snapshotPayments.map(p => ({method: p.method, amount: p.amount})),
+            change: (sale as unknown as {payment_change?: number})?.payment_change,
+            footer: tenant?.receipt_footer ?? null,
+          });
+          await printTicketDirect(ticket);
+          printed = true;
+        } catch (printErr) {
+          console.warn('[CartSheet] fallo impresión directa USB 80mm', printErr);
+        }
+      }
+
+      // Actualizar stock local (sidecar) y notificar
       clearCart();
-      onSaleDone?.({folio: sale.folio, id: sale.id, items: soldItems});
-      toast.success(`Venta registrada · Folio: ${sale.folio}`);
+      onSaleDone?.({folio: sale.folio, id: sale.id, items: snapshotItems});
+      if (printed) {
+        toast.success(`Venta ${folio} · Ticket impreso (80mm)`);
+      } else if (persisted?.printerName) {
+        toast.success(`Venta registrada · Folio: ${folio} (sin impresión)`);
+      } else {
+        toast.success(`Venta registrada · Folio: ${folio}`);
+        toast.error('Sin impresora: Configura USB 80mm en Hardware');
+      }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'No se pudo registrar la venta.';
       toast.error(`Error al vender: ${message}`);
@@ -105,9 +174,9 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
     );
   }
 
-  /* ── Expandido: sidebar completo ─────────────────────────────────────── */
+  /* ── Expandido: sidebar completo (respeta BottomNavBar h-16) ───────────── */
   return (
-    <aside className="fixed top-16 bottom-0 right-0 z-40 flex w-80 flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-[0_4px_12px_var(--color-shadow)]">
+    <aside className="fixed top-16 bottom-16 right-0 z-30 flex w-80 max-h-[calc(100dvh-8rem)] flex-col border-l border-[var(--color-border)] bg-[var(--color-surface-solid)] shadow-[0_4px_12px_var(--color-shadow)] sm:bottom-16 sm:max-h-[calc(100vh-8rem)] max-sm:bottom-16">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-3 py-2">
         <button

@@ -112,6 +112,7 @@ export default function TicketsScreen({
   const [error, setError] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [folioQuery, setFolioQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
@@ -124,9 +125,11 @@ export default function TicketsScreen({
     async (resetOffset = true) => {
       if (resetOffset) setOffset(0);
       const o = resetOffset ? 0 : offset;
+      const folioTrim = folioQuery.trim();
       const params = {
         from: dateFrom || `${today}T00:00:00.000Z`,
         to: dateTo || undefined,
+        folio: folioTrim || undefined,
         limit: 20,
         offset: o,
       };
@@ -149,7 +152,7 @@ export default function TicketsScreen({
         if (!resetOffset) setLoadingMore(false);
       }
     },
-    [dateFrom, dateTo, today, offset, tickets.length],
+    [dateFrom, dateTo, folioQuery, today, offset, tickets.length],
   );
 
   useEffect(() => {
@@ -202,9 +205,40 @@ export default function TicketsScreen({
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
       <TopAppBar title="Mis tickets" onLogout={onLogout} />
 
-      {/* Filtros de fecha */}
+      {/* Filtros: folio + fecha */}
       <div className="border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
         <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col">
+            <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">
+              Folio
+            </label>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="V-00000x"
+                className="w-36 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5 text-[var(--font-small)] text-[var(--color-text)] outline-none"
+                value={folioQuery}
+                onChange={e => setFolioQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleFilter();
+                }}
+                data-testid="input-folio"
+              />
+              {folioQuery && (
+                <button
+                  className="text-[var(--font-small)] text-[var(--color-text-secondary)] hover:text-[var(--color-danger)]"
+                  onClick={() => {
+                    setFolioQuery('');
+                    // aplicar inmediatamente sin folio
+                    setOffset(0);
+                  }}
+                  title="Limpiar folio"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
           <div className="flex flex-col">
             <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">
               Desde
@@ -232,8 +266,13 @@ export default function TicketsScreen({
             onClick={handleFilter}
             data-testid="btn-filter-tickets"
           >
-            Aplicar
+            Buscar
           </button>
+          {folioQuery.trim() && (
+            <span className="rounded-[var(--radius-round)] bg-[var(--color-primary-soft)] px-2 py-1 text-[var(--font-micro)] font-semibold text-[var(--color-primary)]">
+              Folio: {folioQuery.trim().toUpperCase()}
+            </span>
+          )}
           <span className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
             {totalCount} venta{totalCount !== 1 ? 's' : ''}
           </span>
