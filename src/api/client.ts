@@ -77,6 +77,28 @@ export async function syncTokenToRust(token: string | null): Promise<void> {
  * Ejecuta una petición HTTP vía Rust (api_request).
  * Arma la cabecera de auth desde el token de Rust (no del webview).
  */
+type ServerInfo = {ip: string; port: number};
+
+async function resolveServer(): Promise<ServerInfo | null> {
+  const store = useServerStore.getState();
+  if (store.server?.ip) return store.server as ServerInfo;
+  const ip = (await AsyncStorage.getItem(STORAGE_SERVER_IP)) ?? '';
+  const portRaw = await AsyncStorage.getItem(STORAGE_SERVER_PORT);
+  const port = portRaw ? parseInt(portRaw, 10) : 3000;
+  if (ip) return {ip, port};
+  // Fallback dev misma máquina: sin IP configurada, probar 127.0.0.1 (evita wizard vacío)
+  // Solo en dev (import.meta.env.DEV) para no ocultar mala config en prod.
+  try {
+    // @ts-ignore import.meta env
+    if (import.meta.env?.DEV) {
+      return {ip: '127.0.0.1', port: 3000};
+    }
+  } catch {
+    /* no vite env */
+  }
+  return null;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: {
@@ -88,14 +110,8 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const {method = 'GET', body, auth = true} = options;
 
-  // Asegurar que Rust tenga el servidor configurado (si no, leer del storage
-  // y fijarlo; si tampoco hay, lanzar NetworkError).
-  const store = useServerStore.getState();
-  const server = store.server ?? {
-    ip: (await AsyncStorage.getItem(STORAGE_SERVER_IP)) ?? '',
-    port: parseInt((await AsyncStorage.getItem(STORAGE_SERVER_PORT)) ?? '3000', 10),
-  };
-  if (!server.ip) {
+  const server = await resolveServer();
+  if (!server?.ip) {
     throw new NetworkError('Servidor no configurado');
   }
   await syncServerToRust(server.ip, server.port ?? 3000);
@@ -173,12 +189,8 @@ export async function apiUploadFile<T>(
   file: {name: string; mime: string; bytes: ArrayBuffer},
   options: {retried?: boolean} = {},
 ): Promise<T> {
-  const store = useServerStore.getState();
-  const server = store.server ?? {
-    ip: (await AsyncStorage.getItem(STORAGE_SERVER_IP)) ?? '',
-    port: parseInt((await AsyncStorage.getItem(STORAGE_SERVER_PORT)) ?? '3000', 10),
-  };
-  if (!server.ip) {
+  const server = await resolveServer();
+  if (!server?.ip) {
     throw new NetworkError('Servidor no configurado');
   }
   await syncServerToRust(server.ip, server.port ?? 3000);

@@ -7,7 +7,7 @@ Es la versión desktop del frontend `pos-mobil` (React Native): reutiliza su ló
 ## Requisitos
 
 - Rust / Cargo (>= 1.77)
-- Node.js >= 20
+- Node.js ^20.19.0 || >=22.12.0 (requerido por Vite 7 — `crypto.hash`; recomendado `22.12 LTS`, ver `.nvmrc`)
 - Windows 10/11 con WebView2 Runtime (incluido por defecto)
 - Servidor `pos-server` (Fastify) accesible en la red local (descubierto vía UDP)
 
