@@ -27,9 +27,16 @@ Este proyecto usa [Semantic Versioning](https://semver.org/).
 
 - `npm install`, `npx tsc --noEmit` limpio, `vite build` OK (solo warnings
   preexistentes de chunks).
-- **Bloqueado por entorno**: `cargo check` no compila en esta máquina — Application
-  Control (os error 4551) bloquea el build-script de `tauri-plugin-fs`; compilar
-  en máquina sin esa política antes de empaquetar.
+- **Rust**: `cargo check -p tauri` limpio. Los 18 errores E0463/E0599 eran cascada
+  de un fingerprint corrupto de `serialize-to-javascript-impl` (el `.dll` del
+  proc-macro nunca se emitía; `Template`/`#[raw]`/`render_default` vienen de ese
+  crate, no de tauri-macros) — se arregló con
+  `cargo clean -p serialize-to-javascript-impl` (posible causa: mtimes
+  inconsistentes en el registry). Las versiones están bien pareadas
+  (macros/codegen/plugin 2.6.x es lo último estable y compatible con lib 2.10.3).
+- **Bloqueado por entorno (pendiente IT)**: el workspace completo aún no compila
+  aquí — Application Control (os error 4551) bloquea los build-scripts de los
+  plugins (`tauri-plugin-fs`). Empaquetar en máquina sin esa política.
 
 ## [0.3.0] — 2026-08-21 — Fase 2 (comunicación serial: impresora + báscula)
 
