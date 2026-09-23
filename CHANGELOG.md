@@ -5,6 +5,32 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Integración Licencia (rama printer, merge origin/printer 721c826)
+
+### Añadido (del remoto)
+
+- **Wizard primera ejecución `LicenseActivation`** (`4cc5046`): drag&drop `.lic`,
+  file picker Tauri (plugins dialog 2.4.1 + fs 2.4.4), textarea pegado y trial
+  1 día gratis `POST /license/trial`; `AppRoutes` con `useBootstrapLicenseProbe`
+  (wizard cuando `licenseState=expired`, auto-cierre con `GET /license/status` 200);
+  cliente bootstrap-aware (`auth:false` en upload/trial/status, manejo 404 `NO_LICENSE`).
+- **Fix probe bootstrap** (`76aab60`): `resolveServer()` centralizado con fallback dev
+  `127.0.0.1`, reintento al cambiar IP, retry 3s; `.nvmrc` 22.12.0 + `engines`
+  `^20.19.0||>=22.12.0`; capabilities fs en kebab con scope `$HOME/$DESKTOP/$DOCUMENT/$DOWNLOAD/$TEMP`.
+
+### Preservado (local, sin conflictos en el merge)
+
+- Precios manuales (Público/Mayoreo/Especial), unidades Pieza/Kilo, tweaks
+  Reports/Tickets, sidebar carrito, impresión USB directa, imágenes.
+
+### Verificado
+
+- `npm install`, `npx tsc --noEmit` limpio, `vite build` OK (solo warnings
+  preexistentes de chunks).
+- **Bloqueado por entorno**: `cargo check` no compila en esta máquina — Application
+  Control (os error 4551) bloquea el build-script de `tauri-plugin-fs`; compilar
+  en máquina sin esa política antes de empaquetar.
+
 ## [0.3.0] — 2026-08-21 — Fase 2 (comunicación serial: impresora + báscula)
 
 ### Añadido
