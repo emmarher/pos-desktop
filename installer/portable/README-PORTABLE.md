@@ -30,8 +30,11 @@ distribucion-pos-desktop/
 
 ## Notas de release
 
-- El `.exe` sale de `npm run tauri build` en máquina sin WDAC
+- El `.exe` sale de `npx tauri build` en máquina sin WDAC
   (`src-tauri/target/release/pos-desktop.exe`).
+- `src-tauri/tauri.conf.json` lleva `"bundle": {"active": false}` a propósito:
+  omite MSI/NSIS (evita descarga de WiX y makensis). Para retomar instaladores:
+  `active: true` + `targets` según se necesite.
 - Sincronizar SIEMPRE: `version.txt` ↔ `tauri.conf.json:version` ↔
   `package.json:version` ↔ tag git.
 - Requiere WebView2 Runtime (inbox en Win10/11 desde 2021).

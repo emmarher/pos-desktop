@@ -5,6 +5,16 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Distribución solo-exe (rama installer)
+
+### Cambiado
+
+- **`tauri.conf.json`**: `"bundle": {"active": false}` (targets intactos para
+  retomar MSI/NSIS luego). Motivo: el CLI 2.10.1 no acepta `--bundles none` y
+  cualquier bundle dispara WiX/makensis. Con esto, `npx tauri build` termina en
+  `target/release/pos-desktop.exe` sin descargas extra — la vía portable
+  aprobada.
+
 ## [Sin publicar] — Distribución portable desktop (rama installer)
 
 ### Añadido
