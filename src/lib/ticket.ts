@@ -7,7 +7,8 @@
  * para evitar problemas de codepage (ESC t 0x00 CP437 en Rust).
  *
  * Reutiliza el layout del servidor (sales.service.ts buildEscPosTicket):
- *   header, folio, fecha es-MX, items, totales, pagos, footer.
+ *   header sin divisores, folio, fecha es-MX, items, totales, pagos y cierre
+ *   (mensaje + 9 blancas + divisor '======' + tienda) para el corte.
  * Fase 1: se arma en frontend tras createSale; Fase 2 reusará el mismo
  * string para print_jobs.content (delegada).
  */
@@ -44,6 +45,7 @@ export interface TicketData {
 }
 
 const LINE = '------------------------------------------------'; // 48
+const END_LINE = '================================================'; // 48, cierre antes del corte
 const SEP = '--------------------------------'; // 32 para secciones
 const COL_QTY = 6;
 const COL_PRICE = 10;
@@ -133,16 +135,14 @@ export function buildTicket80mm(data: TicketData): string {
 
   let out = '';
 
-  // Header centrado
+  // Header centrado (sin divisores iniciales: van al cierre para el corte)
   out += center(businessName || 'PUNTO DE VENTA') + '\n';
   if (businessAddress) out += center(businessAddress) + '\n';
   if (businessPhone) out += center(`Tel: ${businessPhone}`) + '\n';
-  out += LINE + '\n';
   out += `FOLIO: ${folio}\n`;
   out += `FECHA: ${formatDate(createdAt)}\n`;
   if (cashierName) out += `CAJERO: ${cashierName}\n`;
   if (customerName) out += `CLIENTE: ${customerName}\n`;
-  out += LINE + '\n';
 
   // Tabla items
   out += `${padRight('CANT', COL_QTY)}${padRight('PRODUCTO', 16)}${padLeft('P.UNIT', COL_PRICE)}${padLeft('IMPORTE', COL_SUB)}\n`;
@@ -177,14 +177,16 @@ export function buildTicket80mm(data: TicketData): string {
   // Pagos
   out += paymentsBlock(payments, total, change);
 
-  out += LINE + '\n';
+  // Cierre para el corte: mensaje, 9 líneas en blanco, divisor y tienda.
+  // (Rust agrega su propio feed + GS V después; esto es contenido visible.)
   if (footer) {
     out += center(footer) + '\n';
   } else {
-    out += center('Gracias por su compra') + '\n';
+    out += center('GRACIAS POR SU COMPRA') + '\n';
   }
-  out += center('Conserve su ticket') + '\n';
-  out += '\n\n';
+  out += '\n'.repeat(9);
+  out += END_LINE + '\n';
+  out += center(businessName || 'PUNTO DE VENTA') + '\n';
 
   return out;
 }

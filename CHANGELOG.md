@@ -5,6 +5,17 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Layout de ticket para el corte (rama installer)
+
+### Cambiado
+
+- **Divisores al cierre**: se quitaron las líneas del inicio (header limpio) y
+  el cierre ahora es `GRACIAS POR SU COMPRA` → 9 líneas en blanco → `======`
+  (48 `=`) → nombre de la tienda, para que la cuchilla caiga debajo del texto.
+  Se eliminó el antiguo `Conserve su ticket` del pie.
+- Aplica a venta directa y reimpresión (ambos builders espejo: desktop 48 cols
+  y servidor 30 cols para stored tickets).
+
 ## [Sin publicar] — Revert PRN-2: sin espera de confirmación (rama installer)
 
 ### Quitado
