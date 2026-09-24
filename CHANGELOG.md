@@ -5,6 +5,28 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — PRN-2: confirmación de papel vía spooler (rama installer)
+
+### Añadido
+
+- **Resultado tri-estado de impresión** (Rust `PrintResult` → TS `PrintResult`):
+  `printed` (spooler reportó `JOB_STATUS_PRINTED`/`COMPLETE` = papel afuera),
+  `sent_unconfirmed` (aceptado sin confirmar en ~15s: pudo salir papel),
+  `failed` (rechazo previo o fallo del job + motivo). `print_raw_usb`,
+  `print_test_usb` y `send_raw` lo retornan; el poll lo mapea a
+  COMPLETED / PRINTING / FAILED (PRINTING no se re-encola: evita duplicados).
+- **Confirmación por job**: `print_job_and_confirm` abre → chequea Status →
+  envía → poll `GetJobW(job_id)` 30×500ms con el handle abierto. Job
+  desaparecido de la cola = des-encolado = impreso.
+- **Mensajes**: venta → impreso / enviado-sin-confirmar / generado-pero-no-impreso;
+  reimpresión suma `unconfirmed`; botón Probar de Hardware muestra el tri-estado.
+
+### Verificado
+
+- `cargo test --lib` 18/18 (nuevo `job_status_outcome_maps_spooler_bits` con
+  consts Win32 reales), `tsc` limpio, `vite build` OK. Confirmación física
+  (apagar a mitad) pendiente de caja/VM.
+
 ## [Sin publicar] — Fix impresión honesta + margen de corte (rama installer)
 
 ### Corregido

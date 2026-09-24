@@ -58,6 +58,19 @@ export async function listPorts(): Promise<SerialPortInfo[]> {
   return invoke<SerialPortInfo[]>('list_ports');
 }
 
+/**
+ * Resultado tri-estado de impresión (PRN-2, espejo de Rust PrintResult).
+ * - printed: spooler confirmó JOB_STATUS_PRINTED/COMPLETE (papel afuera).
+ * - sent_unconfirmed: aceptado sin confirmación en ~15s (pudo salir papel).
+ * - failed: rechazo previo o fallo del job (detail trae el motivo).
+ */
+export type PrintOutcome = 'printed' | 'sent_unconfirmed' | 'failed';
+
+export interface PrintResult {
+  outcome: PrintOutcome;
+  detail?: string | null;
+}
+
 /** Lista impresoras Windows spooler (Rust printer_usb::list_printers). Filtra virtuales PDF/XPS salvo USB001 real. */
 export async function listPrinters(): Promise<PrinterInfo[]> {
   try {
@@ -70,13 +83,13 @@ export async function listPrinters(): Promise<PrinterInfo[]> {
 }
 
 /** Envía bytes RAW (base64) a impresora por nombre del spooler. */
-export async function printRawUsb(printerName: string, dataBase64: string): Promise<number> {
-  return invoke<number>('print_raw_usb', {printerName, dataBase64});
+export async function printRawUsb(printerName: string, dataBase64: string): Promise<PrintResult> {
+  return invoke<PrintResult>('print_raw_usb', {printerName, dataBase64});
 }
 
 /** Imprime ticket de prueba por USB (80mm 48 chars) via Rust. */
-export async function printTestUsb(printerName: string): Promise<void> {
-  return invoke('print_test_usb', {printerName});
+export async function printTestUsb(printerName: string): Promise<PrintResult> {
+  return invoke<PrintResult>('print_test_usb', {printerName});
 }
 
 /** Abre un puerto serial (Rust serial::open_port). */
@@ -173,13 +186,21 @@ export async function persistUsbPrinter(info: PersistedUsbPrinter): Promise<void
  * Lee la impresora persistida en storage, arma base64 y llama a
  * Rust `print_raw_usb` (que aplica build_print_sequence 48 + GS V corte).
  * No usa cola del servidor ni orquestador.
+ *
+ * Retorna el resultado tri-estado (PRN-2). Lanza Error en `failed` para
+ * preservar el flujo try/catch de los callers (CartSheet, reimpresión);
+ * `sent_unconfirmed` se retorna (el caller decide el mensaje).
  */
-export async function printTicketDirect(content: string): Promise<void> {
+export async function printTicketDirect(content: string): Promise<PrintResult> {
   const persisted = await getPersistedUsbPrinter();
   const printerName = persisted?.printerName?.trim();
   if (!printerName) {
     throw new Error('Selecciona una impresora USB 80mm en Configuración → Hardware.');
   }
   const b64 = btoa(unescape(encodeURIComponent(content)));
-  await printRawUsb(printerName, b64);
+  const result = await printRawUsb(printerName, b64);
+  if (result.outcome === 'failed') {
+    throw new Error(result.detail ?? 'La impresora no aceptó el trabajo.');
+  }
+  return result;
 }

@@ -228,24 +228,51 @@ fn is_virtual_printer(name: &str) -> bool {    let lower = name.to_lowercase();
 ///
 /// Content: Vec<u8> en base64 o bytes. El caller ya pasó por build_print_sequence.
 #[tauri::command]
-pub fn print_raw_usb(printer_name: String, data_base64: String) -> Result<usize, String> {
+pub fn print_raw_usb(printer_name: String, data_base64: String) -> PrintResult {
     use base64::Engine as _;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(&data_base64)
-        .map_err(|e| format!("base64 inválido: {e}"))?;
-    send_raw(&printer_name, &bytes)?;
-    Ok(bytes.len())
+    let bytes = match base64::engine::general_purpose::STANDARD.decode(&data_base64) {
+        Ok(b) => b,
+        Err(e) => {
+            return PrintResult {
+                outcome: PrintOutcome::Failed,
+                detail: Some(format!("base64 inválido: {e}")),
+            }
+        }
+    };
+    send_raw(&printer_name, &bytes)
+}
+
+/// Resultado tri-estado de una impresión (PRN-2: confirmar papel, no solo spool).
+///
+/// - `Printed`: el spooler reportó JOB_STATUS_PRINTED/COMPLETE (papel afuera).
+/// - `SentUnconfirmed`: bytes aceptados pero sin confirmación en el timeout
+///   (el papel pudo salir; no afirmar ni negar).
+/// - `Failed`: rechazo previo (offline/sin papel/error) o fallo del job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrintOutcome {
+    Printed,
+    SentUnconfirmed,
+    Failed,
+}
+
+/// Resultado serializable a TS de print_raw_usb / print_test_usb.
+#[derive(Debug, Clone, Serialize)]
+pub struct PrintResult {
+    pub outcome: PrintOutcome,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }
 
 /// Envía bytes RAW a la impresora. Interfaz usada por hardware.rs (poll).
-pub fn send_raw(printer_name: &str, data: &[u8]) -> Result<(), String> {
+pub fn send_raw(printer_name: &str, data: &[u8]) -> PrintResult {
     #[cfg(target_os = "windows")]
     {
-        send_raw_winspool(printer_name, data)
+        print_job_and_confirm(printer_name, data)
     }
     #[cfg(not(target_os = "windows"))]
     {
-        // Mock en dev: log + ok (no crashea, no lag)
+        // Mock en dev: log + impreso (no crashea, no lag)
         eprintln!(
             "[printer_usb mock] {} bytes → \"{}\" (secuencia {}…{})",
             data.len(),
@@ -253,12 +280,21 @@ pub fn send_raw(printer_name: &str, data: &[u8]) -> Result<(), String> {
             data.first().copied().unwrap_or(0),
             data.last().copied().unwrap_or(0)
         );
-        Ok(())
+        PrintResult {
+            outcome: PrintOutcome::Printed,
+            detail: None,
+        }
     }
 }
 
+/// Imprime un trabajo completo con confirmación de papel (PRN-2).
+///
+/// Flujo Windows: abrir → chequear Status → StartDoc → escribir → EndDoc →
+/// poll GetJobW(job_id) hasta PRINTED/COMPLETE, fallo o timeout (15s).
+/// El handle vive en todo el flujo (Guard lo cierra al salir).
+/// Nunca retorna Err: todo se expresa en PrintResult para que TS decida mensajes.
 #[cfg(target_os = "windows")]
-fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
+fn print_job_and_confirm(printer_name: &str, data: &[u8]) -> PrintResult {
     use windows::core::{PCWSTR, PWSTR};
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Graphics::Printing::{
@@ -266,11 +302,16 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
         StartPagePrinter, WritePrinter, DOC_INFO_1W,
     };
 
+    let fail = |detail: String| PrintResult {
+        outcome: PrintOutcome::Failed,
+        detail: Some(detail),
+    };
+
     let wide_name: Vec<u16> = printer_name.encode_utf16().chain(std::iter::once(0)).collect();
     let mut handle = HANDLE::default();
     let open = unsafe { OpenPrinterW(PCWSTR(wide_name.as_ptr()), &mut handle, None) };
     if open.is_err() {
-        return Err(format!("OpenPrinterW falló para \"{printer_name}\": {open:?}"));
+        return fail(format!("OpenPrinterW falló para \"{printer_name}\": {open:?}"));
     }
     // Ensure close on drop
     struct Guard(HANDLE);
@@ -284,15 +325,15 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
     // WinSpool acepta el trabajo aunque la impresora esté apagada/desconectada
     // (queda encolado y WritePrinter reporta éxito). Para no mentir con
     // "Ticket impreso", se verifica Status ANTES de enviar: offline, sin papel
-    // o en error → Err honesto que la UI muestra como "no se imprimió".
+    // o en error → Failed honesto que la UI muestra como "no se imprimió".
     match printer_status_flags(handle) {
         Ok(status) => {
             if let Some(reason) = status_unavailable_reason(status) {
-                return Err(format!("Impresora \"{printer_name}\" no disponible ({reason})"));
+                return fail(format!("Impresora \"{printer_name}\" no disponible ({reason})"));
             }
         }
         Err(e) => {
-            return Err(format!("No se pudo leer el estado de \"{printer_name}\": {e}"));
+            return fail(format!("No se pudo leer el estado de \"{printer_name}\": {e}"));
         }
     }
 
@@ -306,11 +347,11 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
     };
     let job_id = unsafe { StartDocPrinterW(handle, 1, &doc_info) };
     if job_id == 0 {
-        return Err(format!("StartDocPrinterW falló (job 0) para \"{printer_name}\""));
+        return fail(format!("StartDocPrinterW falló (job 0) para \"{printer_name}\""));
     }
     if !unsafe { StartPagePrinter(handle) }.as_bool() {
         unsafe { let _ = EndDocPrinter(handle); }
-        return Err("StartPagePrinter falló".to_string());
+        return fail("StartPagePrinter falló".to_string());
     }
     let mut written: u32 = 0;
     let ok = unsafe {
@@ -325,20 +366,101 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
     unsafe { let _ = EndPagePrinter(handle); }
     unsafe { let _ = EndDocPrinter(handle); }
     if !ok.as_bool() {
-        return Err(format!("WritePrinter falló: {ok:?}"));
+        return fail(format!("WritePrinter falló: {ok:?}"));
     }
     if written as usize != data.len() {
-        return Err(format!(
+        return fail(format!(
             "WritePrinter incompleto: {written}/{} bytes",
             data.len()
         ));
     }
-    Ok(())
+
+    // Confirmación de papel: poll del job hasta impreso, fallo o timeout.
+    // Bloquea el comando Tauri (la UI muestra spinner en estos flujos).
+    match wait_job_printed(handle, job_id) {
+        JobWait::Printed => PrintResult {
+            outcome: PrintOutcome::Printed,
+            detail: None,
+        },
+        JobWait::Failed(reason) => fail(format!("Impresora \"{printer_name}\": {reason}")),
+        JobWait::Timeout => PrintResult {
+            outcome: PrintOutcome::SentUnconfirmed,
+            detail: Some("enviado al spooler sin confirmación de papel".to_string()),
+        },
+    }
+}
+
+/// Resultado interno de la espera del job (no se serializa; ver PrintResult).
+#[cfg(target_os = "windows")]
+enum JobWait {
+    Printed,
+    Failed(&'static str),
+    Timeout,
+}
+
+/// Mapeo puro de bits JOB_STATUS_* a desenlace (testeable sin spooler).
+/// None = seguir esperando (estados transitorios: spooling/printing/pausado).
+#[cfg(target_os = "windows")]
+fn job_status_outcome(status: u32) -> Option<JobWait> {
+    use windows::Win32::Graphics::Printing::{
+        JOB_STATUS_COMPLETE, JOB_STATUS_ERROR, JOB_STATUS_OFFLINE, JOB_STATUS_PAPEROUT,
+        JOB_STATUS_PRINTED,
+    };
+    if status & (JOB_STATUS_PRINTED | JOB_STATUS_COMPLETE) != 0 {
+        return Some(JobWait::Printed);
+    }
+    if status & JOB_STATUS_ERROR != 0 {
+        return Some(JobWait::Failed("error del trabajo de impresión"));
+    }
+    if status & JOB_STATUS_OFFLINE != 0 {
+        return Some(JobWait::Failed("impresora offline durante la impresión"));
+    }
+    if status & JOB_STATUS_PAPEROUT != 0 {
+        return Some(JobWait::Failed("sin papel durante la impresión"));
+    }
+    None
+}
+
+/// Espera hasta 15s (30 × 500ms) a que el job salga del spooler.
+/// Si el job desaparece de la cola (GetJobW falla), se asume impreso: el
+/// spooler lo elimina al terminar de des-encolarlo al driver.
+#[cfg(target_os = "windows")]
+fn wait_job_printed(
+    handle: windows::Win32::Foundation::HANDLE,
+    job_id: u32,
+) -> JobWait {
+    use windows::Win32::Graphics::Printing::{GetJobW, JOB_INFO_2W};
+    for _ in 0..30 {
+        let mut needed: u32 = 0;
+        unsafe {
+            let _ = GetJobW(handle, job_id, 2, None, &mut needed);
+        }
+        if needed > 0 {
+            let mut buf = vec![0u8; needed as usize];
+            let mut needed2: u32 = 0;
+            let ok =
+                unsafe { GetJobW(handle, job_id, 2, Some(buf.as_mut_slice()), &mut needed2) };
+            if ok.as_bool() {
+                let info = unsafe { &*(buf.as_ptr() as *const JOB_INFO_2W) };
+                if let Some(outcome) = job_status_outcome(info.Status) {
+                    return outcome;
+                }
+            } else {
+                // Job ya fuera de la cola = des-encolado al driver = impreso.
+                return JobWait::Printed;
+            }
+        } else {
+            return JobWait::Printed;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    JobWait::Timeout
 }
 
 /// Test rápido de impresión por USB: arma ticket de prueba (80mm, 48 chars) y lo envía.
+/// Retorna el resultado tri-estado (la UI muestra impreso / no impreso / sin confirmar).
 #[tauri::command]
-pub fn print_test_usb(printer_name: String) -> Result<(), String> {
+pub fn print_test_usb(printer_name: String) -> PrintResult {
     use crate::printer::build_print_sequence;
     let content = "=== PRUEBA 80mm ===\nPOS Desktop\nHola mundo 123\n¡Ticket OK!\n";
     let seq = build_print_sequence(content, 48);
@@ -377,13 +499,36 @@ mod tests {
             Some("offline (apagada o desconectada)")
         );
     }
-
     #[test]
-    fn send_raw_mock_ok() {        // En macOS/Linux el mock siempre Ok (no crashea).
+    fn send_raw_mock_ok() {
+        // En macOS/Linux el mock siempre impreso (no crashea).
         let r = send_raw("Mock 80mm (dev)", b"hello");
         #[cfg(not(target_os = "windows"))]
-        assert!(r.is_ok());
+        assert_eq!(r.outcome, PrintOutcome::Printed);
         #[cfg(target_os = "windows")]
         let _ = r; // en Windows requeriría spooler real
+    }
+
+    #[test]
+    fn job_status_outcome_maps_spooler_bits() {
+        // Solo existe en Windows: valida el mapeo contra las consts Win32 reales.
+        #[cfg(target_os = "windows")]
+        {
+            use super::{job_status_outcome, JobWait};
+            use windows::Win32::Graphics::Printing::{
+                JOB_STATUS_COMPLETE, JOB_STATUS_ERROR, JOB_STATUS_OFFLINE,
+                JOB_STATUS_PAPEROUT, JOB_STATUS_PRINTED, JOB_STATUS_PRINTING,
+                JOB_STATUS_SPOOLING,
+            };
+            assert!(matches!(job_status_outcome(JOB_STATUS_PRINTED), Some(JobWait::Printed)));
+            assert!(matches!(job_status_outcome(JOB_STATUS_COMPLETE), Some(JobWait::Printed)));
+            assert!(matches!(job_status_outcome(JOB_STATUS_ERROR), Some(JobWait::Failed(_))));
+            assert!(matches!(job_status_outcome(JOB_STATUS_OFFLINE), Some(JobWait::Failed(_))));
+            assert!(matches!(job_status_outcome(JOB_STATUS_PAPEROUT), Some(JobWait::Failed(_))));
+            // Transitorios (spooling/printing) = seguir esperando
+            assert!(job_status_outcome(0).is_none());
+            assert!(job_status_outcome(JOB_STATUS_SPOOLING).is_none());
+            assert!(job_status_outcome(JOB_STATUS_PRINTING).is_none());
+        }
     }
 }

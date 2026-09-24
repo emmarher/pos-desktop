@@ -127,7 +127,7 @@ export default function HardwareScreen() {
     }
     setStatus(`Imprimiendo prueba en "${selectedPrinterName}"…`);
     try {
-      await printTestUsb(selectedPrinterName);
+      const result = await printTestUsb(selectedPrinterName);
       // Asegurar persistencia al probar
       const info = printers.find(p => p.name === selectedPrinterName);
       await persistUsbPrinter({
@@ -135,7 +135,14 @@ export default function HardwareScreen() {
         portName: info?.portName,
         driverName: info?.driverName,
       });
-      setStatus(`✓ Prueba enviada a "${selectedPrinterName}" (80mm 48 cols, ESC @ + GS V corte)`);
+      // Resultado tri-estado (PRN-2): impreso / no impreso / sin confirmar.
+      if (result.outcome === 'printed') {
+        setStatus(`✓ Prueba impresa en "${selectedPrinterName}" (papel confirmado)`);
+      } else if (result.outcome === 'sent_unconfirmed') {
+        setStatus(`Prueba enviada a "${selectedPrinterName}", sin confirmar impresión (revisa el papel)`);
+      } else {
+        setStatus(`Prueba NO impresa en "${selectedPrinterName}": ${result.detail ?? 'error desconocido'}`);
+      }
     } catch (e) {
       setStatus(`Error de impresión USB: ${e}`);
     }
