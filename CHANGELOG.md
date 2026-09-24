@@ -5,6 +5,18 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — F-I2c installer: renovación de licencia en menú usuario (rama installer)
+
+### Añadido
+
+- **Menú de usuario → sección Licencia renovable**: botón "Renovar / subir
+  licencia" con textarea (pegar `payload.firma`) + "Elegir .lic" (file picker
+  nativo, sin plugins Tauri). Sube vía `POST /license/upload` con sesión y
+  refresca `GET /license/status` → store + caché de expiración. Cierra el hueco
+  trial→extendida: antes solo el wizard (visible únicamente en `expired`)
+  permitía activar.
+- **`api/endpoints`**: `uploadLicense()` + `getLicenseStatus()`.
+
 ## [Sin publicar] — F-I2b installer: cambio de PIN forzado en login (rama installer)
 
 ### Añadido

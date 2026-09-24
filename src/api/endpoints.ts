@@ -89,6 +89,40 @@ export function isMustChangePin(err: unknown): boolean {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
+ * LICENCIA (renovación dentro de la app, F-I2c menú usuario)
+ * ────────────────────────────────────────────────────────────────────── */
+
+/** Estado de licencia del servidor (subset que guarda el store local). */
+export interface LicenseStatus {
+  status: 'active' | 'expired' | 'grace';
+  expires_at: string;
+  max_devices: number;
+  lic_id?: string | null;
+  customer?: string | null;
+}
+
+/**
+ * POST /license/upload — subir (renovar/ampliar) licencia.
+ * Con auth:true: envía el JWT si hay sesión (renovación por admin con
+ * settings:manage); sin sesión el server lo trata como bootstrap.
+ */
+export function uploadLicense(licenseData: string): Promise<LicenseStatus> {
+  return apiRequest<LicenseStatus>('/license/upload', {
+    method: 'POST',
+    body: {license_data: licenseData},
+    auth: true,
+  });
+}
+
+/** GET /license/status — estado actual (con auth para datos del tenant). */
+export function getLicenseStatus(): Promise<LicenseStatus> {
+  return apiRequest<LicenseStatus>('/license/status', {
+    method: 'GET',
+    auth: true,
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────────
  * CATÁLOGO Y BÚSQUEDA DE PRODUCTOS
  *   Búsqueda por nombre / internal_code / barcode (RF-CA-006).
  *   El debounce de 300ms y el límite de 20 resultados los aplica la UI

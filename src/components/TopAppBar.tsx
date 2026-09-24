@@ -6,8 +6,12 @@
  * (nombre, rol, tenant, licencia) y la acción de cierre de sesión.
  */
 import {useEffect, useRef, useState} from 'react';
-import {LogOut, ChevronDown, ArrowLeft} from 'lucide-react';
+import {LogOut, ChevronDown, ArrowLeft, KeyRound} from 'lucide-react';
 import {useAuthStore} from '../stores/auth.store';
+import {getLicenseStatus, uploadLicense} from '../api/endpoints';
+import {ApiError} from '../api/client';
+import AsyncStorage from '../lib/storage';
+import {STORAGE_LICENSE_EXPIRY} from '../constants/app';
 
 interface TopAppBarProps {
   title: string;
@@ -31,6 +35,12 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
   const tenant = useAuthStore(s => s.tenant);
   const license = useAuthStore(s => s.license);
   const licenseState = useAuthStore(s => s.licenseState);
+  // Renovación de licencia dentro del menú (F-I2c: trial→extendida sin salir).
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [paste, setPaste] = useState('');
+  const [renewBusy, setRenewBusy] = useState(false);
+  const [renewMsg, setRenewMsg] = useState<string | null>(null);
+  const [renewOk, setRenewOk] = useState(false);
 
   // Inicial del usuario para el avatar (fallback 'U')
   const initial = (user?.name?.trim()?.charAt(0) ?? 'U').toUpperCase();
@@ -49,6 +59,60 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
   const handleLogout = () => {
     setOpen(false);
     onLogout?.();
+  };
+
+  /* Lee un .lic con el file picker nativo (sin depender de plugins Tauri). */
+  const handlePickFile = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.lic,text/plain';
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => setPaste(String(reader.result ?? ''));
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  /* Sube el .lic (renovación/ampliación) y refresca el estado local. */
+  const handleRenew = async () => {
+    const content = paste.trim();
+    if (!content.includes('.')) {
+      setRenewOk(false);
+      setRenewMsg('Formato inválido: se espera payload.firma (base64url).');
+      return;
+    }
+    setRenewBusy(true);
+    setRenewMsg(null);
+    try {
+      await uploadLicense(content);
+      // Releer estado canónico y reflejarlo en store + caché de expiración.
+      const status = await getLicenseStatus();
+      useAuthStore.setState({
+        license: {
+          status: status.status,
+          expires_at: status.expires_at,
+          max_devices: status.max_devices,
+        },
+        licenseState: status.status,
+        error: null,
+      });
+      await AsyncStorage.setItem(STORAGE_LICENSE_EXPIRY, status.expires_at);
+      setRenewOk(true);
+      setRenewMsg(
+        `Licencia actualizada — vence ${new Date(status.expires_at).toLocaleDateString('es-MX')}.`,
+      );
+      setPaste('');
+    } catch (err) {
+      setRenewOk(false);
+      setRenewMsg(
+        err instanceof ApiError ? err.message : 'No se pudo subir la licencia.',
+      );
+    } finally {
+      setRenewBusy(false);
+    }
   };
 
   return (
@@ -115,6 +179,55 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
                 <p className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
                   Vence: {new Date(license.expires_at).toLocaleDateString('es-MX')}
                 </p>
+              )}
+              {/* Renovación trial→extendida sin salir de la app (F-I2c) */}
+              <button
+                className="mt-2 flex items-center gap-1 text-[var(--font-small)] font-semibold text-[var(--color-primary)] hover:underline"
+                onClick={() => {
+                  setRenewOpen(o => !o);
+                  setRenewMsg(null);
+                }}
+                data-testid="btn-license-renew"
+              >
+                <KeyRound size={14} /> Renovar / subir licencia
+              </button>
+              {renewOpen && (
+                <div className="mt-2">
+                  <textarea
+                    value={paste}
+                    onChange={e => setPaste(e.target.value)}
+                    placeholder="base64url(payload).base64url(firma)"
+                    rows={3}
+                    spellCheck={false}
+                    className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] p-2 font-mono text-[var(--font-micro)] text-[var(--color-text)] outline-none"
+                    data-testid="input-license-renew"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border)] px-2 py-1.5 text-[var(--font-small)] font-medium text-[var(--color-text)]"
+                      onClick={handlePickFile}
+                      disabled={renewBusy}
+                      data-testid="btn-license-pick"
+                    >
+                      Elegir .lic
+                    </button>
+                    <button
+                      className="flex-1 rounded-[var(--radius-md)] bg-[var(--color-primary)] px-2 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] disabled:opacity-50"
+                      onClick={handleRenew}
+                      disabled={renewBusy || !paste.trim()}
+                      data-testid="btn-license-upload"
+                    >
+                      {renewBusy ? 'Subiendo…' : 'Subir'}
+                    </button>
+                  </div>
+                  {renewMsg && (
+                    <p
+                      className={`mt-2 text-[var(--font-micro)] font-medium ${renewOk ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'}`}
+                    >
+                      {renewMsg}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             <button
