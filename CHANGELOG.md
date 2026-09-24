@@ -5,6 +5,27 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Distribución portable desktop (rama installer)
+
+### Añadido
+
+- **`installer/portable/instalar-desktop.bat`**: instalador/actualizador
+  idempotente sin admin — copia `pos-desktop.exe` a
+  `%LOCALAPPDATA%\POS Desktop\` (nombre estable), compara `version.txt`
+  (igual = solo refresca accesos; nueva = cierra app y reemplaza),
+  crea accesos Escritorio + Menú inicio (+ Startup con `/startup`).
+  Actualizar = reemplazar, sin desinstalador.
+- **`installer/portable/README-PORTABLE.md`**: layout de distribución,
+  primera ejecución en caja y reglas de versionado.
+- **`installer/portable/version.txt`**: `0.1.0` (sincronizar con
+  `tauri.conf.json` + `package.json` + tag en cada release).
+
+### Notas
+
+- La barra de tareas no se fija por script (bloqueo de Windows): fijado
+  manual una vez; sobrevive a updates por el nombre estable.
+- Mecanismo de accesos probado aislado (SpecialFolders + WScript.Shell OK).
+
 ## [Sin publicar] — Fix: subir licencia vencida avisaba éxito (rama installer)
 
 ### Corregido
