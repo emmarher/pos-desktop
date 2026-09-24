@@ -86,15 +86,20 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
       const folio = sale.folio ?? 'V-?';
 
       // Impresión directa USB 80mm por defecto (Fase 1) — best-effort
-      // Fallback: si no hay impresora persistida, intenta auto-detectar la térmica 80mm
+      // Fallback: si no hay impresora persistida, intenta auto-detectar la térmica 80mm.
+      // Se prefieren impresoras en línea (is_online real desde WinSpool): una
+      // apagada/desconectada acepta el spool igual y mentiría "impreso".
       let printed = false;
+      let printError: string | null = null;
       let persisted = await getPersistedUsbPrinter();
       if (!persisted?.printerName) {
         try {
           const { listPrinters, persistUsbPrinter } = await import('../services/hardware');
           const list = await listPrinters();
-          if (list.length > 0) {
-            const pref = list.find(l => /80mm|thermal|pos|receipt/i.test(l.name)) ?? list[0];
+          const online = list.filter(l => l.isOnline !== false);
+          const pool = online.length > 0 ? online : list;
+          if (pool.length > 0) {
+            const pref = pool.find(l => /80mm|thermal|pos|receipt/i.test(l.name)) ?? pool[0];
             if (pref) {
               await persistUsbPrinter({
                 printerName: pref.name,
@@ -129,6 +134,8 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
           printed = true;
         } catch (printErr) {
           console.warn('[CartSheet] fallo impresión directa USB 80mm', printErr);
+          printError =
+            printErr instanceof Error ? printErr.message : String(printErr ?? '');
         }
       }
 
@@ -138,7 +145,12 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
       if (printed) {
         toast.success(`Venta ${folio} · Ticket impreso (80mm)`);
       } else if (persisted?.printerName) {
-        toast.success(`Venta registrada · Folio: ${folio} (sin impresión)`);
+        // La venta quedó registrada pero NO salió papel (impresora offline,
+        // sin papel o error de spool): decirlo explícito, nunca "impreso".
+        toast.success(`Venta ${folio} · Ticket generado, pero no se imprimió`);
+        if (printError) {
+          toast.error(`Impresora: ${printError}`);
+        }
       } else {
         toast.success(`Venta registrada · Folio: ${folio}`);
         toast.error('Sin impresora: Configura USB 80mm en Hardware');

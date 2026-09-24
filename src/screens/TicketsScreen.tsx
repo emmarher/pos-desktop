@@ -179,14 +179,14 @@ export default function TicketsScreen({
       // 'printed' = salió directo por USB local; 'queued' = delegado a la
       // cola del servidor (requiere el orquestador en el equipo con impresora).
       const outcome = await reprintTicket(saleId);
-      toast.success(
-        outcome === 'printed'
-          ? 'Ticket reimpreso (80mm).'
-          : 'Ticket encolado para impresión.',
-      );
+      if (outcome === 'printed') {
+        toast.success('Ticket reimpreso (80mm).');
+      } else {
+        toast.success('Ticket generado, pero no se imprimió (encolado).');
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : String(err);
-      toast.error(`No se pudo reimprimir: ${msg}`);
+      toast.error(`No se imprimió: ${msg} — el ticket quedó registrado.`);
     }
   };
 

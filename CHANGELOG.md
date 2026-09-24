@@ -5,6 +5,30 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Fix impresión honesta + margen de corte (rama installer)
+
+### Corregido
+
+- **Falso "Ticket impreso"**: WinSpool acepta el trabajo aunque la impresora
+  esté apagada/desconectada (queda encolado y `WritePrinter` reporta éxito).
+  `send_raw_winspool` ahora consulta `GetPrinterW` (nivel 2) ANTES de enviar y
+  falla honesto ante offline/sin papel/error/no disponible; además
+  `list_printers` reporta `is_online` real (antes siempre `true`) y el
+  auto-detectado de `CartSheet` prefiere impresoras en línea.
+- **Mensajes**: venta con impresora pero sin papel → "Venta {folio} · Ticket
+  generado, pero no se imprimió" (+ motivo); reimpresión encolada/fallida →
+  "Ticket generado, pero no se imprimió (encolado)." / "No se imprimió:
+  <motivo> — el ticket quedó registrado." Nunca más "impreso" sin papel.
+- **Margen de corte**: `build_print_sequence` emite **9 líneas en blanco**
+  antes de `GS V` (antes feed de 3 que cortaba sobre el texto). Punto único:
+  cubre venta, reimpresión, poll y prueba.
+
+### Verificado
+
+- `cargo test --lib` 17/17 (incluye `status_unavailable_reason_maps_win32_bits`
+  y `print_sequence_feeds_nine_blank_lines_before_cut` nuevos), `tsc` limpio,
+  `vite build` OK.
+
 ## [Sin publicar] — Distribución solo-exe (rama installer)
 
 ### Cambiado

@@ -122,20 +122,94 @@ fn list_printers_windows() -> Result<Vec<PrinterInfo>, String> {
         if !is_usb001 && is_virtual_printer(&name) {
             continue;
         }
-        // PRINTER_INFO_2W.Status bit 0x00000002 = offline? Usamos is_online = true por defecto.
+        // Estado real: una impresora listada pero offline (apagada/desconectada)
+        // debe marcarse is_online=false para que la UI no la ofrezca como válida
+        // ni reporte "impreso" al encolar en spool. Si no se puede abrir, offline.
+        let is_online = printer_is_online(&name).unwrap_or(false);
         out.push(PrinterInfo {
             name,
             driver_name: driver,
             port_name: port,
-            is_online: true,
+            is_online,
         });
     }
     Ok(out)
 }
 
+/// Bits de PRINTER_INFO_2W.Status que implican "no va a salir papel".
+/// Describe por qué una impresora no está disponible, o None si está OK.
+/// Función pura (testeable sin hardware ni Windows): los valores son del ABI
+/// Win32 PRINTER_STATUS_* (congelados; no dependen del crate `windows`).
+fn status_unavailable_reason(status: u32) -> Option<&'static str> {
+    const PRINTER_STATUS_ERROR: u32 = 2;
+    const PRINTER_STATUS_PAPER_OUT: u32 = 16;
+    const PRINTER_STATUS_OFFLINE: u32 = 128;
+    const PRINTER_STATUS_NOT_AVAILABLE: u32 = 4096;
+    if status & PRINTER_STATUS_OFFLINE != 0 {
+        return Some("offline (apagada o desconectada)");
+    }
+    if status & PRINTER_STATUS_PAPER_OUT != 0 {
+        return Some("sin papel");
+    }
+    if status & PRINTER_STATUS_ERROR != 0 {
+        return Some("en error");
+    }
+    if status & PRINTER_STATUS_NOT_AVAILABLE != 0 {
+        return Some("no disponible");
+    }
+    None
+}
+
+/// Lee los flags Status (PRINTER_INFO_2W nivel 2) de un handle abierto.
+#[cfg(target_os = "windows")]
+fn printer_status_flags(
+    handle: windows::Win32::Foundation::HANDLE,
+) -> Result<u32, String> {
+    use windows::Win32::Graphics::Printing::{GetPrinterW, PRINTER_INFO_2W};
+    // Patrón dos llamadas: primero tamaño, luego datos.
+    let mut needed: u32 = 0;
+    unsafe {
+        let _ = GetPrinterW(handle, 2, None, &mut needed);
+    }
+    if needed == 0 {
+        return Err("GetPrinterW: tamaño 0".to_string());
+    }
+    let mut buf = vec![0u8; needed as usize];
+    let mut needed2: u32 = 0;
+    unsafe { GetPrinterW(handle, 2, Some(buf.as_mut_slice()), &mut needed2) }
+        .map_err(|e| format!("GetPrinterW falló: {e:?}"))?;
+    let info = unsafe { &*(buf.as_ptr() as *const PRINTER_INFO_2W) };
+    Ok(info.Status)
+}
+
+/// Abre la impresora por nombre y reporta si está en condiciones de imprimir.
+/// Ok(true) = lista; Ok(false) = existe pero no disponible; Err = no se pudo consultar.
+#[cfg(target_os = "windows")]
+fn printer_is_online(printer_name: &str) -> Result<bool, String> {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Graphics::Printing::{ClosePrinter, OpenPrinterW};
+    let wide_name: Vec<u16> = printer_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut handle = HANDLE::default();
+    let open = unsafe { OpenPrinterW(PCWSTR(wide_name.as_ptr()), &mut handle, None) };
+    if open.is_err() {
+        return Err(format!("OpenPrinterW falló para \"{printer_name}\""));
+    }
+    struct Guard(HANDLE);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = ClosePrinter(self.0);
+            }
+        }
+    }
+    let _guard = Guard(handle);
+    let status = printer_status_flags(handle)?;
+    Ok(status_unavailable_reason(status).is_none())
+}
+
 /// Retorna true si la impresora es virtual (PDF/XPS/Fax) y no debe usarse como 80mm directa.
-fn is_virtual_printer(name: &str) -> bool {
-    let lower = name.to_lowercase();
+fn is_virtual_printer(name: &str) -> bool {    let lower = name.to_lowercase();
     lower.contains("microsoft print to pdf")
         || lower.contains("microsoft xps")
         || lower.contains("xps document writer")
@@ -207,6 +281,21 @@ fn send_raw_winspool(printer_name: &str, data: &[u8]) -> Result<(), String> {
     }
     let _guard = Guard(handle);
 
+    // WinSpool acepta el trabajo aunque la impresora esté apagada/desconectada
+    // (queda encolado y WritePrinter reporta éxito). Para no mentir con
+    // "Ticket impreso", se verifica Status ANTES de enviar: offline, sin papel
+    // o en error → Err honesto que la UI muestra como "no se imprimió".
+    match printer_status_flags(handle) {
+        Ok(status) => {
+            if let Some(reason) = status_unavailable_reason(status) {
+                return Err(format!("Impresora \"{printer_name}\" no disponible ({reason})"));
+            }
+        }
+        Err(e) => {
+            return Err(format!("No se pudo leer el estado de \"{printer_name}\": {e}"));
+        }
+    }
+
     let mut doc_name: Vec<u16> = "POS Ticket\0".encode_utf16().collect();
     // RAW = pasar bytes tal cual al driver (ESC/POS). Sin conversión.
     let mut data_type: Vec<u16> = "RAW\0".encode_utf16().collect();
@@ -273,8 +362,24 @@ mod tests {
     }
 
     #[test]
-    fn send_raw_mock_ok() {
-        // En macOS/Linux el mock siempre Ok (no crashea).
+    fn status_unavailable_reason_maps_win32_bits() {
+        assert_eq!(status_unavailable_reason(0), None);
+        assert_eq!(
+            status_unavailable_reason(128),
+            Some("offline (apagada o desconectada)")
+        );
+        assert_eq!(status_unavailable_reason(16), Some("sin papel"));
+        assert_eq!(status_unavailable_reason(2), Some("en error"));
+        assert_eq!(status_unavailable_reason(4096), Some("no disponible"));
+        // Offline domina sobre otros bits
+        assert_eq!(
+            status_unavailable_reason(128 | 16),
+            Some("offline (apagada o desconectada)")
+        );
+    }
+
+    #[test]
+    fn send_raw_mock_ok() {        // En macOS/Linux el mock siempre Ok (no crashea).
         let r = send_raw("Mock 80mm (dev)", b"hello");
         #[cfg(not(target_os = "windows"))]
         assert!(r.is_ok());
