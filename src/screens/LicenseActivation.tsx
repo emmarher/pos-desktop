@@ -66,8 +66,22 @@ export default function LicenseActivation({ onActivated }: { onActivated?: () =>
         body: { license_data: trimmed },
         auth: false,
       });
+      // El server APLICA también licencias vencidas (200 + status expired,
+      // desactiva el tenant): no es éxito — avisar y quedarse en el wizard.
+      const licId = String((result as unknown as { lic_id?: string })?.lic_id ?? source);
+      const expiresAt = String((result as unknown as { expires_at?: string })?.expires_at ?? '');
+      if ((result as unknown as { status?: string })?.status === 'expired') {
+        setStatusKind('error');
+        setStatusMsg(
+          `La licencia ${licId} está vencida desde ${expiresAt}. No se puede operar: pide a tu proveedor una renovación.`,
+        );
+        try {
+          useAuthStore.setState({ licenseState: 'expired' as const });
+        } catch {}
+        return;
+      }
       setStatusKind('success');
-      setStatusMsg(`Licencia activada: ${String((result as unknown as { lic_id?: string })?.lic_id ?? source)} — expira ${String((result as unknown as { expires_at?: string })?.expires_at ?? '')}`);
+      setStatusMsg(`Licencia activada: ${licId} — expira ${expiresAt}`);
       await refreshLicense();
       // Actualizar store de licencia para que AppRoutes salga del wizard
       try {

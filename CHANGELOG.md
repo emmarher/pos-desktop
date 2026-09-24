@@ -5,6 +5,19 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Fix: subir licencia vencida avisaba éxito (rama installer)
+
+### Corregido
+
+- **Wizard y menú mostraban éxito al subir una licencia vencida**: el servidor
+  la APLICA (200 + `status: expired`, desactiva el tenant, audita SUSPENDED —
+  verificado empíricamente con `.lic` firmado expirado en BD temporal) y la UI
+  festejaba "activada" + marcaba `active`, dejando al usuario en una app que
+  responde 403 en todo sin explicación. Ahora ambas superficies detectan
+  `status === 'expired'` y muestran error nombrando la fecha
+  ("…está vencida desde … pide a tu proveedor una renovación"), sin tocar el
+  estado local; el wizard permanece visible.
+
 ## [Sin publicar] — F-I2c installer: renovación de licencia en menú usuario (rama installer)
 
 ### Añadido

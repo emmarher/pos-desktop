@@ -90,6 +90,15 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
       await uploadLicense(content);
       // Releer estado canónico y reflejarlo en store + caché de expiración.
       const status = await getLicenseStatus();
+      // El server aplica también licencias vencidas (200 + status expired):
+      // mostrarlo como error, sin tocar el estado local.
+      if (status.status === 'expired') {
+        setRenewOk(false);
+        setRenewMsg(
+          `La licencia subida está vencida desde ${new Date(status.expires_at).toLocaleDateString('es-MX')}. Pide una renovación a tu proveedor.`,
+        );
+        return;
+      }
       useAuthStore.setState({
         license: {
           status: status.status,
