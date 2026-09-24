@@ -364,10 +364,9 @@ export function getTicketContent(saleId: string): Promise<StoredTicket> {
  * consumidor de la cola (orquestador Rust `start_hardware`) no corre por
  * defecto en desktop — sin él, todo lo encolado queda en PENDING para siempre.
  *
- * @returns 'printed' si el spooler confirmó papel, 'unconfirmed' si se aceptó
- *   sin confirmar en ~15s, 'queued' si se delegó a la cola del servidor.
+ * @returns 'printed' si salió por la impresora local, 'queued' si se delegó.
  */
-export async function reprintTicket(saleId: string): Promise<'printed' | 'unconfirmed' | 'queued'> {
+export async function reprintTicket(saleId: string): Promise<'printed' | 'queued'> {
   const ticket = await getTicketContent(saleId);
   // Import dinámico para no crear ciclo: services/hardware no importa este módulo.
   const {printTicketDirect, getPersistedUsbPrinter} = await import('../services/hardware');
@@ -375,8 +374,8 @@ export async function reprintTicket(saleId: string): Promise<'printed' | 'unconf
   if (printer?.printerName) {
     // Hay impresora local: imprimir directo. Si falla, el error se propaga
     // (sin encolar duplicado: el usuario reintenta desde Tickets).
-    const result = await printTicketDirect(ticket.content);
-    return result.outcome === 'printed' ? 'printed' : 'unconfirmed';
+    await printTicketDirect(ticket.content);
+    return 'printed';
   }
   // Sin impresora local: delegar al dispositivo con can_print vía cola.
   await enqueuePrintJob({

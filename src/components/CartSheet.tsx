@@ -87,10 +87,9 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
       // Impresión directa USB 80mm por defecto (Fase 1) — best-effort
       // Fallback: si no hay impresora persistida, intenta auto-detectar la térmica 80mm.
-      // Se prefieren impresoras en línea (isOnline real desde WinSpool): una
+      // Se prefieren impresoras en línea (is_online real desde WinSpool): una
       // apagada/desconectada acepta el spool igual y mentiría "impreso".
       let printed = false;
-      let unconfirmed = false;
       let printError: string | null = null;
       let persisted = await getPersistedUsbPrinter();
       if (!persisted?.printerName) {
@@ -131,12 +130,8 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
             change: (sale as unknown as {payment_change?: number})?.payment_change,
             footer: tenant?.receipt_footer ?? null,
           });
-          const result = await printTicketDirect(ticket);
-          if (result.outcome === 'printed') {
-            printed = true;
-          } else if (result.outcome === 'sent_unconfirmed') {
-            unconfirmed = true;
-          }
+          await printTicketDirect(ticket);
+          printed = true;
         } catch (printErr) {
           console.warn('[CartSheet] fallo impresión directa USB 80mm', printErr);
           printError =
@@ -149,9 +144,6 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
       onSaleDone?.({folio: sale.folio, id: sale.id, items: snapshotItems});
       if (printed) {
         toast.success(`Venta ${folio} · Ticket impreso (80mm)`);
-      } else if (unconfirmed) {
-        // Bytes aceptados pero el spooler no confirmó papel en ~15s.
-        toast.success(`Venta ${folio} · Ticket enviado a impresora, sin confirmar impresión`);
       } else if (persisted?.printerName) {
         // La venta quedó registrada pero NO salió papel (impresora offline,
         // sin papel o error de spool): decirlo explícito, nunca "impreso".

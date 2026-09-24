@@ -176,13 +176,11 @@ export default function TicketsScreen({
 
   const handleReprint = async (saleId: string) => {
     try {
-      // 'printed' = spooler confirmó papel; 'unconfirmed' = aceptado sin
-      // confirmar; 'queued' = delegado a la cola del servidor.
+      // 'printed' = salió directo por USB local; 'queued' = delegado a la
+      // cola del servidor (requiere el orquestador en el equipo con impresora).
       const outcome = await reprintTicket(saleId);
       if (outcome === 'printed') {
         toast.success('Ticket reimpreso (80mm).');
-      } else if (outcome === 'unconfirmed') {
-        toast.success('Ticket enviado a impresora, sin confirmar impresión.');
       } else {
         toast.success('Ticket generado, pero no se imprimió (encolado).');
       }

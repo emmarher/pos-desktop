@@ -249,13 +249,6 @@ async fn patch_job_status(
 }
 
 /// Poll vía WinSpool RAW (80mm USB) — delegada a printer_usb::send_raw.
-///
-/// Mapeo a la cola del servidor (PRN-2):
-///   Printed         → COMPLETED (papel confirmado afuera).
-///   SentUnconfirmed → PRINTING  (quedó en el spooler de Windows, que lo
-///                       reintentará según su política; el poll solo trae
-///                       PENDING así que no se duplica el ticket).
-///   Failed          → FAILED + evento hardware-error con el motivo.
 async fn poll_print_jobs_usb(
     client: &reqwest::Client,
     base_url: &str,
@@ -263,24 +256,15 @@ async fn poll_print_jobs_usb(
     printer_name: &str,
     app: &AppHandle,
 ) -> Result<(), String> {
-    use crate::printer_usb::{PrintOutcome, send_raw};
     let jobs = fetch_pending_jobs(client, base_url, config).await?;
     for job in jobs {
         let content = job.content.unwrap_or_default();
         // 80mm 203dpi → 48 chars (384 dots)
         let seq = build_print_sequence(&content, 48);
-        let result = send_raw(printer_name, &seq);
-        let new_status = match result.outcome {
-            PrintOutcome::Printed => "COMPLETED",
-            PrintOutcome::SentUnconfirmed => "PRINTING",
-            PrintOutcome::Failed => "FAILED",
-        };
-        if result.outcome == PrintOutcome::Failed {
-            emit_error(
-                app,
-                "printer",
-                &result.detail.unwrap_or_else(|| "fallo de impresión".to_string()),
-            );
+        let result = crate::printer_usb::send_raw(printer_name, &seq);
+        let new_status = if result.is_ok() { "COMPLETED" } else { "FAILED" };
+        if let Err(e) = &result {
+            emit_error(app, "printer", e);
         }
         patch_job_status(client, base_url, config, &job.id, new_status, app).await;
     }
@@ -288,8 +272,6 @@ async fn poll_print_jobs_usb(
 }
 
 /// Poll vía puerto serial (legacy COM) — ESC/POS clásico.
-/// El serial no da confirmación de papel: éxito de escritura → COMPLETED
-/// (igual que antes; el pre-chequeo de estado solo existe en la vía USB).
 async fn poll_print_jobs_serial(
     client: &reqwest::Client,
     base_url: &str,
