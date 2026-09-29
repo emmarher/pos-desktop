@@ -5,6 +5,13 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [Sin publicar] — Política release-only portable (rama installer)
+
+### Decidido
+
+- Distribución desktop = **solo exe release**, sin debug ni MSI (documentado en
+  `installer/portable/README-PORTABLE.md`).
+
 ## [Sin publicar] — Layout de ticket para el corte (rama installer)
 
 ### Cambiado

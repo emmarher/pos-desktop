@@ -1,6 +1,9 @@
 # Distribución portable — POS Desktop (Windows)
 
 > Sin admin, sin instalador MSI: copiar, ejecutar, listo.
+> **Política: SOLO binario release** (`src-tauri/target/release/pos-desktop.exe`).
+> Prohibido distribuir el debug (`target/debug/`: lento, con consola, desactualizado)
+> y no se genera MSI (`bundle.active: false`).
 
 ## Contenido de la carpeta de distribución
 
@@ -31,7 +34,8 @@ distribucion-pos-desktop/
 ## Notas de release
 
 - El `.exe` sale de `npx tauri build` en máquina sin WDAC
-  (`src-tauri/target/release/pos-desktop.exe`).
+  (`src-tauri/target/release/pos-desktop.exe`). **Nunca `target/debug/`**:
+  verificar fecha/tamaño si hay duda (el debug abre consola y es más pesado).
 - `src-tauri/tauri.conf.json` lleva `"bundle": {"active": false}` a propósito:
   omite MSI/NSIS (evita descarga de WiX y makensis). Para retomar instaladores:
   `active: true` + `targets` según se necesite.
