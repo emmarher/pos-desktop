@@ -5,6 +5,13 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-10-01 — Versión identificable (rama installer)
+
+### Cambiado
+
+- Versión `0.1.0` → **`0.2.0`** en `package.json`, `tauri.conf.json` y
+  `installer/portable/version.txt` (sincronizados para cada release).
+
 ## [Sin publicar] — Política release-only portable (rama installer)
 
 ### Decidido
