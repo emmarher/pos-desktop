@@ -153,6 +153,19 @@ export async function apiRequest<T>(
         // y propagar el 401 (el router manda a login por isAuthenticated).
         await forceLocalLogout();
       }
+      // Licencia inválida/vencida (no es PIN inicial: ese flujo lo maneja
+      // LoginScreen): mandar al wizard. Aplica TAMBIÉN sin auth: el login es
+      // auth:false y su 403 de licencia debe abrir el wizard (si no, el usuario
+      // queda atrapado en el login viendo "Licencia vencida"). El envoltorio no
+      // trae `code`, se matchea por status + mensaje estable del servidor.
+      if (
+        status === 403 &&
+        /licencia vencida|licencia inv.lida|sin licencia|LICENSE_EXPIRED|NO_LICENSE/i.test(msg) &&
+        !/cambiar tu PIN|MUST_CHANGE_PIN/i.test(msg)
+      ) {
+        const {useAuthStore} = await import('../stores/auth.store');
+        useAuthStore.setState({licenseState: 'expired'});
+      }
       throw new ApiError(status, status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR', msg);
     }
 

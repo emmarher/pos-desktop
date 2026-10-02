@@ -5,6 +5,31 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-10-01 — Discovery multicapa (mDNS + localhost + barrido) y activación de licencia
+
+### Añadido
+
+- **mDNS**: se cablea `src-tauri/src/mdns.rs` (`mod mdns;` + comando `mdns_discover`),
+  antes código muerto. El servidor ya publica `_pos-server._tcp.local`.
+- **Barrido /24**: nuevo `src-tauri/src/net.rs` con comandos `local_subnet` y
+  `sweep_subnet`; botón "Búsqueda profunda (barrido /24)" en la pantalla de conexión.
+- **Fallback 127.0.0.1** para server y desktop en la misma máquina.
+- Botón **"Activar / renovar licencia"** en Conexión y Login.
+
+### Cambiado
+
+- `api/discovery.ts`: orden de capas guardado → mDNS/UDP (en paralelo) → 127.0.0.1.
+- `api/client.ts`: el 403 de licencia abre el wizard **también en el login**
+  (peticiones sin auth), no solo con sesión.
+- `screens/LicenseActivation.tsx`: ya no se auto-cierra cuando la licencia existe
+  pero está **expirada** (el server responde 200 con `status:'expired'`).
+
+### Corregido
+
+- `src-tauri/src/mdns.rs`: `shutdown()` del daemon también en la ruta de éxito
+  (antes dejaba el socket multicast abierto) y `saturating_duration_since`
+  (el método anterior no compilaba en el toolchain fijado).
+
 ## [0.2.0] — 2026-10-01 — Versión identificable (rama installer)
 
 ### Cambiado

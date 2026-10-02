@@ -8,9 +8,10 @@ import {useCallback, useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {useTheme} from '../hooks/useTheme';
 import {useServerStore} from '../stores/server.store';
-import {discoverServer, applyServer} from '../api/discovery';
+import {discoverServer, applyServer, sweepLan} from '../api/discovery';
 import {syncServerToRust} from '../api/client';
 import {useAuthStore} from '../stores/auth.store';
+import {API_PORT} from '../constants/app';
 import {toast} from '../hooks/useToast';
 import POSButton from '../components/POSButton';
 import GlassBackground from '../components/GlassBackground';
@@ -25,7 +26,9 @@ export default function ConnectionScreen() {
   /* ── 1) ESTADO LOCAL ──────────────────────────────────────────────── */
   const [searching, setSearching] = useState(false);
   const [manualIp, setManualIp] = useState('');
-  const [manualPort, setManualPort] = useState('3000');
+  const [manualPort, setManualPort] = useState(String(API_PORT));
+  const [deepSearching, setDeepSearching] = useState(false);
+  const [deepError, setDeepError] = useState<string | null>(null);
 
   /* ── 2) DESCUBRIMIENTO AUTOMÁTICO ─────────────────────────────────── */
   const runDiscovery = useCallback(async () => {
@@ -55,7 +58,7 @@ export default function ConnectionScreen() {
       toast.error('Ingresa la dirección IP del servidor.');
       return;
     }
-    const port = parseInt(manualPort, 10) || 3000;
+    const port = parseInt(manualPort, 10) || API_PORT;
     setLastError(null);
     try {
       await applyServer({ip, port});
@@ -64,6 +67,28 @@ export default function ConnectionScreen() {
       setLastError('No se pudo conectar al servidor');
     }
   }, [manualIp, manualPort, navigate, setLastError]);
+
+  /* Búsqueda profunda: barrido /24 (último recurso, manual). */
+  const handleDeepSearch = useCallback(async () => {
+    const port = parseInt(manualPort, 10) || API_PORT;
+    setDeepError(null);
+    setLastError(null);
+    setDeepSearching(true);
+    const found = await sweepLan(port);
+    setDeepSearching(false);
+    if (found) {
+      await applyServer(found);
+      navigate('/login');
+    } else {
+      setDeepError('El barrido /24 no encontró el servidor. Revisa la red o usa la IP manual.');
+    }
+  }, [manualPort, navigate, setLastError]);
+
+  /* Abre el wizard de activación de licencia (AppRoutes lo renderiza con
+     licenseState='expired'), útil cuando el login falla por licencia. */
+  const handleActivateLicense = useCallback(() => {
+    useAuthStore.setState({licenseState: 'expired'});
+  }, []);
 
   /* ── 3B) QR (placeholder) ─────────────────────────────────────────── */
   const handleQrPairing = () => {
@@ -105,6 +130,13 @@ export default function ConnectionScreen() {
           </GlassSurface>
         )}
 
+        {/* Banner: barrido /24 sin resultados */}
+        {deepError && (
+          <GlassSurface className="mb-4 rounded-md p-4 bg-[var(--color-danger-soft)]">
+            <p className="text-small text-[var(--color-danger)] text-center">{deepError}</p>
+          </GlassSurface>
+        )}
+
         {/* Botón de búsqueda */}
         <GlassSurface className="mb-4 p-4" style={{backgroundColor: 'var(--color-primary-soft)'}}>
           <POSButton
@@ -143,7 +175,28 @@ export default function ConnectionScreen() {
               variant="secondary"
               data-testid="btn-ip-manual"
             />
+            <POSButton
+              title={deepSearching ? 'Barriendo la red…' : 'Búsqueda profunda (barrido /24)'}
+              onPress={handleDeepSearch}
+              loading={deepSearching}
+              variant="ghost"
+              data-testid="btn-busqueda-profunda"
+            />
           </div>
+        </GlassSurface>
+
+        {/* Licencia: abre el wizard de activación/renovación */}
+        <GlassSurface className="mt-6 rounded-md p-4" style={{backgroundColor: 'var(--color-surface)'}}>
+          <h3 className="font-medium text-[var(--color-text)] mb-3">Licencia</h3>
+          <p className="text-small text-[var(--color-text-secondary)] mb-3">
+            Si el servidor reporta licencia vencida o inválida, carga aquí el archivo .lic.
+          </p>
+          <POSButton
+            title="Activar / renovar licencia"
+            onPress={handleActivateLicense}
+            variant="secondary"
+            data-testid="btn-activar-licencia"
+          />
         </GlassSurface>
 
         {/* Emparejamiento QR */}

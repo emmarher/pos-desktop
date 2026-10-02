@@ -208,13 +208,20 @@ export default function LoginScreen() {
               data-testid="btn-login"
             />
 
-            <div className="mt-4 text-center">
+            <div className="mt-4 flex flex-col items-center gap-2">
               <button
                 className="text-[var(--font-small)] font-medium text-[var(--color-primary)] hover:underline"
                 onClick={() => navigate('/')}
                 data-testid="btn-back-connection"
               >
                 ¿Cambiar servidor?
+              </button>
+              <button
+                className="text-[var(--font-small)] font-medium text-[var(--color-primary)] hover:underline"
+                onClick={() => useAuthStore.setState({licenseState: 'expired'})}
+                data-testid="btn-activar-licencia"
+              >
+                Activar / renovar licencia
               </button>
             </div>
           </GlassSurface>

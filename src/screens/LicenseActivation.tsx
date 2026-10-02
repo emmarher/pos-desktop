@@ -179,16 +179,23 @@ export default function LicenseActivation({ onActivated }: { onActivated?: () =>
   // Accesibilidad: focus trap mínimo y soporte teclado para activar
   const pasteRef = useRef<HTMLTextAreaElement>(null);
 
-  // Verificar estado inicial de licencia para auto-ocultar wizard si ya hay licencia
+  // Verificar estado inicial: la licencia puede EXISTIR pero estar expirada
+  // (el server responde 200 con status 'expired'). Solo se cierra el wizard si
+  // está realmente vigente (active/grace); si no, se queda visible.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        await apiRequest('/license/status', { method: 'GET', auth: false });
-        if (!cancelled) {
-          // Hay licencia: actualizar store y cerrar wizard
+        const data = await apiRequest<{ status?: string }>('/license/status', { method: 'GET', auth: false });
+        if (cancelled) return;
+        const st = data?.status;
+        if (st === 'active' || st === 'grace') {
+          // Licencia vigente: actualizar store y cerrar wizard
           useAuthStore.setState({ licenseState: 'active' as const });
           onActivated?.();
+        } else {
+          // Expirada / estado desconocido → wizard debe quedarse visible
+          useAuthStore.setState({ licenseState: 'expired' as const });
         }
       } catch (e) {
         if (e instanceof ApiError && (e.code === 'NO_LICENSE' || e.status === 404)) {
