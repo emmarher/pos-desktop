@@ -175,6 +175,8 @@ export interface CreateProductInput {
   unit_conversion?: number;
   price?: number;
   cost?: number;
+  /** Stock inicial (solo al crear; en edición se ajusta desde Inventario). */
+  stock?: number;
   min_stock?: number;
   max_stock?: number | null;
   is_scale_enabled?: boolean;

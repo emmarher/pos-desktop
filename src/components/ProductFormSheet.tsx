@@ -58,7 +58,6 @@ export default function ProductFormSheet({
   const [minStock, setMinStock] = useState('');
   const [pricesByType, setPricesByType] = useState<Record<string, string>>({});
   const [isScale, setIsScale] = useState(false);
-  const [allowFractional, setAllowFractional] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   /* ── Imagen: archivo nuevo + preview + flag de quitada (solo edición) */
@@ -95,7 +94,6 @@ export default function ProductFormSheet({
       setStock(initial.stock ? String(initial.stock) : '');
       setMinStock(initial.min_stock ? String(initial.min_stock) : '');
       setIsScale(initial.is_scale_enabled ?? false);
-      setAllowFractional(initial.allow_fractional_sale ?? true);
       if (initial.prices && initial.prices.length > 0) {
         const map: Record<string, string> = {};
         for (const p of initial.prices) map[p.price_type_id] = String(p.price);
@@ -117,7 +115,6 @@ export default function ProductFormSheet({
       setMinStock('');
       setPricesByType({});
       setIsScale(false);
-      setAllowFractional(true);
       setImageFile(null);
       setImageRemoved(false);
       setImagePreview(null);
@@ -208,8 +205,9 @@ export default function ProductFormSheet({
       price: retailPrice, // fallback para loadPrices, no input duplicado
       min_stock: num(minStock),
       is_scale_enabled: isScale,
-      allow_fractional_sale: allowFractional,
       prices,
+      // Stock inicial SOLO al crear; en edición el stock se ajusta desde Inventario.
+      ...(mode === 'create' ? {stock: num(stock)} : {}),
     };
 
     setSubmitting(true);
@@ -453,15 +451,21 @@ export default function ProductFormSheet({
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                Stock inicial
+                {mode === 'edit' ? 'Stock actual' : 'Stock inicial'}
               </label>
               <input
-                className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
+                className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none disabled:opacity-60"
                 placeholder="0"
                 value={stock}
                 onChange={e => setStock(e.target.value)}
+                disabled={mode === 'edit'}
                 data-testid="pf-stock"
               />
+              {mode === 'edit' && (
+                <p className="mt-1 text-[var(--font-micro)] text-[var(--color-text-secondary)]">
+                  Se ajusta con «Ajustar stock» en Inventario.
+                </p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
@@ -499,20 +503,6 @@ export default function ProductFormSheet({
               ? 'La unidad de venta es MASS: se puede habilitar báscula.'
               : 'Báscula solo disponible si la unidad de venta es MASS.'}
           </p>
-
-          <div className="mt-3 flex items-center justify-between">
-            <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">Venta fraccional</span>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                className="peer sr-only"
-                checked={allowFractional}
-                onChange={e => setAllowFractional(e.target.checked)}
-              />
-              <div className="peer h-6 w-11 rounded-full bg-[var(--color-border)] peer-checked:bg-[var(--color-primary)]" />
-              <div className="absolute left-0.5 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
-            </label>
-          </div>
         </div>
 
         {/* Acciones */}
