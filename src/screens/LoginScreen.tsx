@@ -141,6 +141,9 @@ export default function LoginScreen() {
               placeholder="Código de tenant"
               value={tenantCode}
               onChange={e => setTenantCode(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') void handleLogin();
+              }}
               autoCapitalize="characters"
               data-testid="input-tenant-code"
             />
@@ -154,6 +157,9 @@ export default function LoginScreen() {
               placeholder="PIN (4-6 dígitos)"
               value={pin}
               onChange={e => setPin(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') void handleLogin();
+              }}
               maxLength={6}
               data-testid="input-pin"
             />
@@ -177,6 +183,9 @@ export default function LoginScreen() {
                   placeholder="PIN nuevo"
                   value={newPin}
                   onChange={e => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void handleChangePin();
+                  }}
                   maxLength={6}
                   data-testid="input-new-pin"
                 />
@@ -187,6 +196,9 @@ export default function LoginScreen() {
                   placeholder="Confirmar PIN nuevo"
                   value={confirmPin}
                   onChange={e => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') void handleChangePin();
+                  }}
                   maxLength={6}
                   data-testid="input-confirm-pin"
                 />

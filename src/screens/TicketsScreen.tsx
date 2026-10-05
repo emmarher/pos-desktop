@@ -9,17 +9,19 @@
  * - Filtro por rango de fechas (from/to); paginación "Cargar más".
  */
 import {useCallback, useEffect, useMemo, useState} from 'react';
-import {Printer, Trash2} from 'lucide-react';
+import {Eye, Printer, Trash2} from 'lucide-react';
 import {useAuthStore} from '../stores/auth.store';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import {toast} from '../hooks/useToast';
 import {
   getMyTickets,
+  getSale,
   cancelSale,
   reprintTicket,
   type SaleHistoryItem,
 } from '../api/endpoints';
+import type {SaleDetail} from '../models';
 import {ApiError} from '../api/client';
 
 interface TicketsScreenProps {
@@ -97,6 +99,157 @@ function CancelReasonDialog({
   );
 }
 
+/** Fila "etiqueta — valor" del resumen de totales. */
+function SumRow({label, value, bold}: {label: string; value: string; bold?: boolean}) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-[var(--color-text-secondary)]">{label}</span>
+      <span className={bold ? 'font-bold text-[var(--color-text)]' : 'text-[var(--color-text)]'}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/** Modal: detalle completo de una venta (GET /sales/:id). */
+function SaleDetailDialog({
+  saleId,
+  onClose,
+}: {
+  saleId: string | null;
+  onClose: () => void;
+}) {
+  const [detail, setDetail] = useState<SaleDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saleId) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setDetail(null);
+    getSale(saleId)
+      .then(d => {
+        if (!cancelled) setDetail(d);
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [saleId]);
+
+  if (!saleId) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[90vh] w-full max-w-md flex-col rounded-[var(--radius-xl)] bg-[var(--color-surface-solid)] p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="mb-3 text-[var(--font-medium)] font-extrabold text-[var(--color-text)]">
+          Detalle de venta {detail?.folio ?? ''}
+        </h3>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <p className="py-6 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+              Cargando…
+            </p>
+          ) : error ? (
+            <p className="py-6 text-center text-[var(--font-small)] font-semibold text-[var(--color-danger)]">
+              {error}
+            </p>
+          ) : detail ? (
+            <>
+              <p className="mb-3 text-[var(--font-micro)] text-[var(--color-text-secondary)]">
+                {new Date(detail.created_at).toLocaleString('es-MX')} ·{' '}
+                {METHOD_LABELS[detail.payment_state] ?? detail.payment_state}
+                {detail.status === 'CANCELLED' ? ' · CANCELADO' : ''}
+              </p>
+              {detail.cancel_reason && (
+                <p className="mb-3 rounded-[var(--radius-md)] bg-[var(--color-danger-soft)] px-3 py-2 text-[var(--font-micro)] font-semibold text-[var(--color-danger)]">
+                  Motivo de cancelación: {detail.cancel_reason}
+                </p>
+              )}
+
+              <h4 className="mb-1 text-[var(--font-small)] font-bold text-[var(--color-text)]">
+                Artículos
+              </h4>
+              <div className="mb-4 divide-y divide-[var(--color-border)]">
+                {detail.items.map(it => (
+                  <div key={it.id} className="flex items-center justify-between gap-2 py-1.5">
+                    <span className="min-w-0 flex-1 truncate text-[var(--font-small)] text-[var(--color-text)]">
+                      {it.quantity} × {it.product_name}
+                    </span>
+                    <span className="shrink-0 text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                      ${fmt(it.unit_price)}
+                    </span>
+                    <span className="w-20 shrink-0 text-right text-[var(--font-small)] font-bold text-[var(--color-text)]">
+                      ${fmt(it.subtotal)}
+                    </span>
+                  </div>
+                ))}
+                {detail.items.length === 0 && (
+                  <p className="py-2 text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                    Sin artículos.
+                  </p>
+                )}
+              </div>
+
+              {detail.payments.length > 0 && (
+                <>
+                  <h4 className="mb-1 text-[var(--font-small)] font-bold text-[var(--color-text)]">
+                    Pagos
+                  </h4>
+                  <div className="mb-4 divide-y divide-[var(--color-border)]">
+                    {detail.payments.map(p => (
+                      <div key={p.id} className="flex items-center justify-between py-1.5">
+                        <span className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                          {METHOD_LABELS[p.method] ?? p.method}
+                          {p.reference_code ? ` · ${p.reference_code}` : ''}
+                        </span>
+                        <span className="text-[var(--font-small)] font-bold text-[var(--color-text)]">
+                          ${fmt(p.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-1 border-t border-[var(--color-border)] pt-3 text-[var(--font-small)]">
+                <SumRow label="Subtotal" value={'$' + fmt(detail.subtotal)} />
+                {detail.discount > 0 && (
+                  <SumRow label="Descuento" value={'−$' + fmt(detail.discount)} />
+                )}
+                {detail.tax > 0 && <SumRow label="Impuesto" value={'$' + fmt(detail.tax)} />}
+                <SumRow label="Total" value={'$' + fmt(detail.total)} bold />
+              </div>
+            </>
+          ) : null}
+        </div>
+
+        <button
+          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-soft)]"
+          onClick={onClose}
+          data-testid="btn-close-detail"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function TicketsScreen({
   activeTab,
   onTabChange,
@@ -117,6 +270,7 @@ export default function TicketsScreen({
   const [loadingMore, setLoadingMore] = useState(false);
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelSaleId, setCancelSaleId] = useState<string | null>(null);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
 
   /* Fecha por defecto: desde inicio de hoy hasta ahora */
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -342,6 +496,14 @@ export default function TicketsScreen({
                   </span>
                   <button
                     className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary)]"
+                    onClick={() => setDetailSaleId(s.id)}
+                    title="Ver detalle de la venta"
+                    data-testid={`detail-${s.id}`}
+                  >
+                    <Eye size={16} />
+                  </button>
+                  <button
+                    className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-primary-soft)] hover:text-[var(--color-primary)]"
                     onClick={() => void handleReprint(s.id)}
                     title="Reimprimir ticket"
                     data-testid={`reprint-${s.id}`}
@@ -388,6 +550,8 @@ export default function TicketsScreen({
         }}
         onConfirm={handleCancel}
       />
+
+      <SaleDetailDialog saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
 
       <BottomNavBar active={activeTab} onChange={onTabChange} visibleTabs={visibleTabs} />
     </div>

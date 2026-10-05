@@ -46,6 +46,8 @@ export default function ProductSheet({
 }: ProductSheetProps) {
   const addItem = useCartStore(state => state.addItem);
   const [quantity, setQuantity] = useState(1);
+  /** Texto del input de cantidad (permite editar/borrar mientras se escribe). */
+  const [qtyText, setQtyText] = useState('1');
   const [selectedPriceId, setSelectedPriceId] = useState<string | null>(null);
   /** La foto falló al cargar → placeholder con inicial (degradación grácil). */
   const [imageFailed, setImageFailed] = useState(false);
@@ -56,9 +58,11 @@ export default function ProductSheet({
   const [isReadingScale, setIsReadingScale] = useState(false);
   const [scaleError, setScaleError] = useState<string | null>(null);
   const weightInputRef = useRef<HTMLInputElement>(null);
+  const qtyInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setQuantity(1);
+    setQtyText('1');
     setSelectedPriceId(null);
     setImageFailed(false);
     /* Reset peso al cambiar de producto */
@@ -92,6 +96,15 @@ export default function ProductSheet({
 
   /* Stock máximo en kg para MASS (product.stock ya está en base_unit = kg) */
   const maxWeightKg = product.stock;
+
+  /* Cantidad máxima vendible (COUNT entero) y setter que sincroniza input + estado. */
+  const maxQty = Math.max(1, Math.floor(product.stock));
+  const commitQuantity = (n: number) => {
+    const parsed = Number.isFinite(n) ? Math.floor(n) : 1;
+    const clamped = Math.max(1, Math.min(maxQty, parsed));
+    setQuantity(clamped);
+    setQtyText(String(clamped));
+  };
 
   /** Leer peso desde la báscula delegada */
   const handleReadScale = async () => {
@@ -190,7 +203,7 @@ export default function ProductSheet({
   const handleSelectPrice = (option: ProductPriceOption) => {
     if (quantity < option.minQuantity) {
       if (product.stock >= option.minQuantity) {
-        setQuantity(option.minQuantity);
+        commitQuantity(option.minQuantity);
         toast.info(
           `${option.priceType.name} aplica desde ${option.minQuantity} pzas.`,
         );
@@ -210,14 +223,12 @@ export default function ProductSheet({
    * lo cobrado coincida siempre con lo mostrado.
    */
   const handleDecrement = () => {
-    setQuantity(q => {
-      const next = Math.max(1, q - 1);
-      if (next < selectedPrice.minQuantity && selectedPrice.minQuantity > 1) {
-        setSelectedPriceId(availablePrices[0].priceType.id);
-        toast.info(`Cantidad menor a ${selectedPrice.minQuantity}: precio Público.`);
-      }
-      return next;
-    });
+    const next = Math.max(1, quantity - 1);
+    if (next < selectedPrice.minQuantity && selectedPrice.minQuantity > 1) {
+      setSelectedPriceId(availablePrices[0].priceType.id);
+      toast.info(`Cantidad menor a ${selectedPrice.minQuantity}: precio Público.`);
+    }
+    commitQuantity(next);
   };
 
   return (
@@ -457,7 +468,7 @@ export default function ProductSheet({
             )}
           </div>
         ) : (
-          /* ── MODO COUNT: selector +/- original ───────────────────────── */
+          /* ── MODO COUNT: selector +/- con cantidad editable ──────────── */
           <div className="mb-5 flex items-center justify-center gap-6">
             <button
               className="flex h-14 w-14 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:opacity-80"
@@ -466,12 +477,31 @@ export default function ProductSheet({
             >
               <Minus size={22} />
             </button>
-            <span className="min-w-12 text-center text-[var(--font-xlarge)] font-extrabold text-[var(--color-text)]">
-              {quantity}
-            </span>
+            <input
+              ref={qtyInputRef}
+              type="text"
+              inputMode="numeric"
+              value={qtyText}
+              onChange={e => {
+                // Solo dígitos; permitir vacío mientras se escribe.
+                const clean = e.target.value.replace(/\D/g, '').slice(0, 4);
+                setQtyText(clean);
+                if (clean !== '') {
+                  setQuantity(Math.max(1, Math.min(maxQty, parseInt(clean, 10))));
+                }
+              }}
+              onBlur={() => commitQuantity(quantity)}
+              onFocus={() => requestAnimationFrame(() => qtyInputRef.current?.select())}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleConfirm();
+              }}
+              className="min-w-12 w-16 bg-transparent text-center text-[var(--font-xlarge)] font-extrabold text-[var(--color-text)] outline-none"
+              aria-label="Cantidad"
+              data-testid="qty-input"
+            />
             <button
               className="flex h-14 w-14 items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-primary-soft)] text-[var(--color-primary)] hover:opacity-80"
-              onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
+              onClick={() => commitQuantity(quantity + 1)}
               data-testid="qty-plus"
             >
               <Plus size={22} />
