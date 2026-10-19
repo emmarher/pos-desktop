@@ -5,6 +5,35 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.3] — 2026-10-06 — Mostrar el motivo del bloqueo por licencia (403)
+
+### Corregido
+
+- Al recibir un **403 de licencia** (incluido el login), el cliente ahora muestra un
+  aviso con el motivo del server (p. ej. "Licencia vencida. Contacte a soporte.") en vez
+  de quedar atrapado en el login sin explicación. Se muestra una sola vez por transición
+  para no saturar.
+
+## [0.2.2] — 2026-10-04 — Login con Enter, detalle de ticket, cantidad editable y stock inicial
+
+### Añadido
+
+- **Login**: Enter en código/PIN (y en el cambio de PIN) autentica sin clic en el botón.
+- **Tickets**: botón "ver detalle" por ticket + modal con artículos, pagos y totales (`GET /sales/:id`).
+- **ProductSheet**: la cantidad (COUNT) es un input editable con teclado, con el mismo estilo,
+  sincronizado con +/− y acotado al stock.
+- **Producto**: el alta envía el `stock` inicial (solo al crear).
+
+### Cambiado
+
+- **Formulario de producto**: en edición el stock se muestra como "Stock actual" y queda
+  deshabilitado (se ajusta con "Ajustar stock" en Inventario).
+
+### Quitado
+
+- **"Venta fraccional"**: era un no-op (el flag no se usaba en la venta ni en la UI);
+  se conserva "Usa báscula" (solo para unidad de venta MASS).
+
 ## [0.2.1] — 2026-10-01 — Discovery multicapa (mDNS + localhost + barrido) y activación de licencia
 
 ### Añadido

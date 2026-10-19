@@ -164,7 +164,14 @@ export async function apiRequest<T>(
         !/cambiar tu PIN|MUST_CHANGE_PIN/i.test(msg)
       ) {
         const {useAuthStore} = await import('../stores/auth.store');
+        const wasExpired = useAuthStore.getState().licenseState === 'expired';
         useAuthStore.setState({licenseState: 'expired'});
+        // Mostrar el motivo (una vez) para que el usuario sepa por qué se le
+        // bloqueó el acceso y no quede atrapado en el login sin explicación.
+        if (!wasExpired) {
+          const {toast} = await import('../hooks/useToast');
+          toast.error(msg || 'Licencia vencida. Contacte a soporte.');
+        }
       }
       throw new ApiError(status, status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR', msg);
     }
