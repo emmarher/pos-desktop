@@ -5,6 +5,53 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.4] — 2026-10-21 — Catálogo contra el backend, ajuste de stock editable y detalle de venta en Reportes
+
+### Corregido
+
+- **El catálogo se cortaba en 50 productos** y la búsqueda solo miraba esos 50.
+  `loadCatalog()` (Caja) y `loadInventory()` (Inventario) pedían `limit: 100`, pero el
+  backend recortaba a 50 (`products.service.ts` limitaba la página a 50) y el filtrado por
+  nombre/SKU/código se hacía **en memoria**. Con más de 50 productos, los siguientes quedaban
+  invisibles y buscar "Cebolla" respondía "No hay productos" aunque existiera. La búsqueda
+  ahora va **contra el servidor** (`GET /products?q=…`) con debounce de 300 ms.
+- **El filtro de categoría** también se aplicaba en memoria; ahora se manda al backend
+  (`category_id`), que el server ya soportaba.
+- **Las etiquetas del estado de pago** se veían como `PAID` (se usaba el mapa de métodos de
+  pago). Ahora son **Pagado / Pendiente / Parcial**.
+
+### Añadido
+
+- **`src/hooks/useProductCatalog.ts`** (nuevo): hook compartido por Inventario y Caja.
+  - Búsqueda contra el servidor con debounce (`SEARCH_DEBOUNCE_MS`), paginación con `offset`
+    y botón "Cargar más (X de Y)".
+  - En modo navegación acumula páginas de 200 (`CATALOG_PAGE_SIZE`) hasta
+    `CATALOG_MAX_AUTO_ITEMS` (1000); con texto de búsqueda la página es de 20 (`SEARCH_LIMIT`).
+  - Descarta respuestas obsoletas (`requestSeq`) y permite parchar un producto en local
+    (`patchProduct`, para el stock tras una venta).
+- **Ajuste de stock con teclado**: la cantidad del `AdjustStockSheet` es un input editable
+  (acepta decimales con coma o punto), Enter confirma, y el campo recibe el foco con el
+  texto seleccionado al abrir. Antes solo se podía ajustar con los botones +/−.
+- **Detalle de venta en Reportes**: el historial abre el modal con artículos, pagos y
+  totales (`GET /sales/:id`), igual que Tickets. Se extrajo el modal a
+  `src/components/SaleDetailDialog.tsx` (ya no duplicado en dos pantallas) y la fila del
+  historial a `src/components/SaleHistoryRow.tsx`, con badge `CANCELADO` y total en rojo
+  para las ventas canceladas.
+  El botón de detalle **solo se dibuja con el permiso `sales:read_own`**, que es el que
+  exige `GET /sales/:id` (evita un 403 en tenants con roles propios).
+
+### Cambiado
+
+- `constants/app.ts`: `CATALOG_PAGE_SIZE = 200` y `CATALOG_MAX_AUTO_ITEMS = 1000`
+  (`SEARCH_DEBOUNCE_MS` y `SEARCH_LIMIT` ya existían pero no se usaban).
+- `ProductFormSheet` devuelve el id del producto creado (`onSaved(productId)`) para poder
+  resaltarlo y hacer scroll hasta él en Inventario.
+
+### Verificado
+
+- `tsc --noEmit` sin errores · `vite build` OK (375.57 kB / 109.67 kB gzip).
+- `pos-server` `npm test` → 66/66 en verde.
+
 ## [0.2.3] — 2026-10-06 — Mostrar el motivo del bloqueo por licencia (403)
 
 ### Corregido

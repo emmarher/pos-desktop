@@ -33,6 +33,7 @@ pos-desktop/
 │   ├── stores/        # Zustand (auth, cart, server, sync)
 │   ├── models/        # tipos y modelos de dominio
 │   ├── constants/     # app, theme (design tokens glass)
+│   ├── hooks/         # useTheme, useToast, useProductCatalog (catálogo paginado)
 │   ├── services/      # udp-discovery, serial, printer, scale, hardware
 │   ├── screens/       # Connection, Login, Dashboard, POS, Inventario, etc.
 │   ├── components/    # sistema de diseño glass
@@ -41,6 +42,21 @@ pos-desktop/
     ├── src/           # udp.rs, serial.rs, printer.rs, scale.rs, lib.rs
     └── capabilities/  # permisos Tauri
 ```
+
+## Catálogo, búsqueda y paginación
+
+El catálogo (Caja e Inventario) **no se trae entero de una vez**: se pagina contra
+`GET /products` con `q` (nombre, SKU, código interno o código de barras), `category_id`,
+`limit` y `offset`. El máximo del server es **1000 productos por página** (`limit=2000` → 400).
+
+- La búsqueda va **contra el servidor** con debounce de 300 ms (`SEARCH_DEBOUNCE_MS`) — ya no
+  se filtra en memoria, que era lo que hacía que los productos fuera de la primera página
+  fueran invisibles e imposibles de encontrar.
+- Sin texto de búsqueda, el hook `src/hooks/useProductCatalog.ts` va **acumulando páginas** de
+  200 (`CATALOG_PAGE_SIZE`) hasta 1000 (`CATALOG_MAX_AUTO_ITEMS`).
+- Con texto de búsqueda, la página es de 20 (`SEARCH_LIMIT`) y aparece el botón
+  **"Cargar más (X de Y)"** mientras queden resultados (`total`).
+- Al crear o editar un producto, la fila se **resalta y se hace scroll** hasta ella.
 
 ## Garantía de calidad
 
