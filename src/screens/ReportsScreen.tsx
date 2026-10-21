@@ -11,18 +11,13 @@ import {useCallback, useEffect, useState} from 'react';
 import {getQuickStats, getSalesHistory} from '../api/endpoints';
 import type {QuickStats, SaleHistoryItem} from '../api/endpoints';
 import {ApiError} from '../api/client';
+import {useAuthStore} from '../stores/auth.store';
+import SaleDetailDialog, {METHOD_LABELS} from '../components/SaleDetailDialog';
+import SaleHistoryRow from '../components/SaleHistoryRow';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import KpiCard from '../components/KpiCard';
 import GlassSurface from '../components/GlassSurface';
-
-const METHOD_LABELS: Record<string, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  CREDIT: 'Crédito',
-  VOUCHER: 'Voucher',
-};
 
 const fmt = (n: number) =>
   n.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -49,6 +44,12 @@ export default function ReportsScreen({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [historyOffset, setHistoryOffset] = useState(0);
+  const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
+
+  /* GET /sales/:id exige `sales:read_own`: si el usuario no lo tiene, la
+   * pestaña Reportes sigue funcionando pero sin el botón de detalle. */
+  const user = useAuthStore(s => s.user);
+  const canViewDetail = user?.permissions.includes('sales:read_own') ?? false;
 
   /* KPIs: ventas de hoy, ayer, desglose por método y categoría */
   const loadQuickStats = useCallback(async () => {
@@ -243,15 +244,12 @@ export default function ReportsScreen({
                 <>
                   <div className="divide-y divide-[var(--color-border)]">
                     {history.map(s => (
-                      <div key={s.id} className="flex items-center justify-between py-2">
-                        <div>
-                          <p className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">{s.folio}</p>
-                          <p className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
-                            {new Date(s.created_at).toLocaleString('es-MX')} · {s.seller_name ?? '—'}
-                          </p>
-                        </div>
-                        <span className="text-[var(--font-medium)] font-bold text-[var(--color-primary)]">${fmt(s.total)}</span>
-                      </div>
+                      <SaleHistoryRow
+                        key={s.id}
+                        sale={s}
+                        canViewDetail={canViewDetail}
+                        onViewDetail={setDetailSaleId}
+                      />
                     ))}
                   </div>
                   {canLoadMore && (
@@ -276,6 +274,8 @@ export default function ReportsScreen({
           </>
         )}
       </div>
+
+      <SaleDetailDialog saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
 
       <BottomNavBar active={activeTab} onChange={onTabChange} visibleTabs={visibleTabs} />
     </div>
