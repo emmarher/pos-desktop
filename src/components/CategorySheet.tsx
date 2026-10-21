@@ -6,6 +6,10 @@
  * color y descripción). Usa POST /categories y PATCH /categories/:id
  * — el padre decide si lo muestra según el permiso categories:manage.
  * Errores vía toast; la lista se recarga localmente tras cada guardado.
+ *
+ * El color NO se elige a mano: el selector está deshabilitado y el color
+ * se asigna automáticamente (primer color libre de la paleta) al crear una
+ * categoría nueva. En modo editar se conserva el color que ya tenía.
  */
 import {useCallback, useEffect, useState} from 'react';
 import {Pencil, X} from 'lucide-react';
@@ -36,7 +40,7 @@ function errMsg(err: unknown): string {
   return err instanceof ApiError ? err.message : String(err);
 }
 
-/** Paleta rápida para elegir color de categoría. */
+/** Paleta rápida de colores para las categorías. */
 const COLOR_SWATCHES = [
   '#22C55E',
   '#3B82F6',
@@ -47,6 +51,19 @@ const COLOR_SWATCHES = [
   '#64748B',
   '#EC4899',
 ];
+
+/**
+ * Elige automáticamente el color de una categoría nueva: el primer color
+ * de la paleta que no esté en uso por otra categoría, para que cada una
+ * sea distinguible de un vistazo. Si la paleta está agotada, reutiliza el
+ * primero.
+ */
+function pickAutoColor(used: Array<string | null | undefined>): string {
+  const taken = new Set(
+    used.filter((c): c is string => !!c).map(c => c.toUpperCase()),
+  );
+  return COLOR_SWATCHES.find(c => !taken.has(c.toUpperCase())) ?? COLOR_SWATCHES[0];
+}
 
 export default function CategorySheet({onClose, onChanged}: CategorySheetProps) {
   const [view, setView] = useState<ViewState>({kind: 'list'});
@@ -81,15 +98,15 @@ export default function CategorySheet({onClose, onChanged}: CategorySheetProps) 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  /** Abre el formulario en modo crear (campos limpios). */
+  /** Abre el formulario en modo crear (campos limpios, color automático). */
   const openCreate = useCallback(() => {
     setName('');
     setPrefix('');
-    setColor(COLOR_SWATCHES[0]);
+    setColor(pickAutoColor(categories.map(c => c.color)));
     setDescription('');
     setErrors({});
     setView({kind: 'form', mode: 'create'});
-  }, []);
+  }, [categories]);
 
   /** Abre el formulario en modo editar con prefill. */
   const openEdit = useCallback((cat: Category) => {
@@ -197,10 +214,27 @@ export default function CategorySheet({onClose, onChanged}: CategorySheetProps) 
             <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{errors.prefix}</p>
           )}
 
-          {/* Color */}
+          {/* Color — solo lectura: se asigna automáticamente (ver openCreate). */}
           <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
             Color
           </label>
+          <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2">
+            <span
+              className="h-5 w-5 shrink-0 rounded-full"
+              style={{backgroundColor: color}}
+              aria-hidden="true"
+            />
+            <span className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+              Asignado automáticamente
+            </span>
+          </div>
+
+          {/*
+            Selector de color deshabilitado.
+            Para reactivarlo: descomenta este bloque y vuelve a llamar a
+            setColor(c) en el onClick de cada botón.
+          */}
+          {/*
           <div className="flex flex-wrap items-center gap-2">
             {COLOR_SWATCHES.map(c => (
               <button
@@ -215,6 +249,7 @@ export default function CategorySheet({onClose, onChanged}: CategorySheetProps) 
               />
             ))}
           </div>
+          */}
 
           {/* Descripción */}
           <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
