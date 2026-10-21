@@ -16,6 +16,14 @@ export const FAILED_CONNECTIONS_TO_REACTIVATE_UDP = 3;
 export const SEARCH_DEBOUNCE_MS = 300;
 export const SEARCH_LIMIT = 20;
 
+/* ── Catálogo de productos (RF-CA-006) ──────────────────────────────
+ * El server recorta `limit` a 1000. El catálogo se trae PAGINADO y se
+ * acumula: browse = bloques de 200, búsqueda = bloques de 20.
+ * CATALOG_MAX_AUTO_ITEMS es el tope de carga automática (después aparece
+ * el botón "Cargar más"). */
+export const CATALOG_PAGE_SIZE = 200;
+export const CATALOG_MAX_AUTO_ITEMS = 1000;
+
 export const PRINT_POLLING_MS = 2000;
 export const SCALE_HEARTBEAT_MS = 500;
 

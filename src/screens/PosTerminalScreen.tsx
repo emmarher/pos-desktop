@@ -5,12 +5,13 @@
  * catálogo grid, sheet de cantidad (3 precios), carrito y POST /sales
  * (vía Rust).
  */
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import type {Category, PriceType, Product} from '../models';
-import {searchProducts, getCategories, getPriceTypes} from '../api/endpoints';
+import {getCategories, getPriceTypes} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {useCartStore} from '../stores/cart.store';
 import {useAuthStore} from '../stores/auth.store';
+import {useProductCatalog} from '../hooks/useProductCatalog';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import SearchInput from '../components/SearchInput';
@@ -35,19 +36,34 @@ export default function PosTerminalScreen({
   onLogout,
   visibleTabs,
 }: PosTerminalScreenProps) {
-  const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   /* Detectar ancho de ventana para modo sidecar (wide) vs FAB (narrow). */
   const SIDECAR_BREAKPOINT = 768; /* >=768px → sidecar; <768px → FAB */
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth);
   const isWideScreen = windowWidth >= SIDECAR_BREAKPOINT;
 
-  const [products, setProducts] = useState<Product[]>([]);
+  /* Catálogo: búsqueda y filtro van al BACKEND, con paginación real.
+     (Antes se pedía limit=100 —que el server recortaba a 50— y se filtraba
+      en memoria: los productos nuevos "C…"/"T…" nunca aparecían.) */
+  const {
+    products,
+    total,
+    queryInput,
+    setQueryInput,
+    categoryId,
+    setCategoryId,
+    loading,
+    loadingMore,
+    error,
+    setError,
+    hasMore,
+    loadMore,
+    reload,
+    patchProduct,
+  } = useProductCatalog();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const cartCount = useCartStore(s => s.items.length);
   const user = useAuthStore(s => s.user);
@@ -84,22 +100,15 @@ export default function PosTerminalScreen({
   /* device_id de la báscula si esta máquina la tiene registrada (HardwareScreen). */
   const scaleDeviceId = getScaleDeviceId() ?? undefined;
 
+  /* Categorías y tipos de precio: son listas cortas, no paginan.
+     El catálogo de productos lo carga el hook useProductCatalog. */
   const loadCatalog = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const [prodRes, cats, pts] = await Promise.all([
-        searchProducts({limit: 50}),
-        getCategories(),
-        getPriceTypes(),
-      ]);
-      if (prodRes.items.length > 0) setProducts(prodRes.items);
+      const [cats, pts] = await Promise.all([getCategories(), getPriceTypes()]);
       if (cats.length > 0) setCategories(cats);
       if (pts.length > 0) setPriceTypes(pts);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : String(err));
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -110,28 +119,13 @@ export default function PosTerminalScreen({
   /* RF-VE-003: al confirmar venta, el stock local se actualiza al instante
      (el backend también descuenta ATOMIC; aquí reflejamos en el grid). */
   const handleSaleDone = (_sale: {folio: string; id: string; items: CartItem[]}) => {
-    const clearProduct = (p: Product) => {
-      const sold = _sale.items.find(it => it.product.id === p.id);
-      if (!sold) return p;
-      const newStock = Math.max(0, (p.stock ?? 0) - sold.quantity);
-      return {...p, stock: newStock};
-    };
-    setProducts(prev => prev.map(clearProduct));
+    _sale.items.forEach(it => {
+      const current = products.find(p => p.id === it.product.id);
+      if (!current) return;
+      patchProduct(it.product.id, {stock: Math.max(0, (current.stock ?? 0) - it.quantity)});
+    });
     setSelectedProduct(null);
   };
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter(pr => {
-      const mCat = activeCategory === 'all' || pr.category_id === activeCategory;
-      const mQ =
-        !q ||
-        pr.name.toLowerCase().includes(q) ||
-        (pr.sku ?? '').toLowerCase().includes(q) ||
-        (pr.internal_code ?? '').toLowerCase().includes(q);
-      return mCat && mQ;
-    });
-  }, [products, query, activeCategory]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
@@ -139,14 +133,19 @@ export default function PosTerminalScreen({
 
       {/* Búsqueda + categorías */}
       <div className="px-4 pt-3">
-        <SearchInput placeholder="Buscar productos…" value={query} onChangeText={setQuery} testID="search-products" />
+        <SearchInput
+          placeholder="Buscar productos…"
+          value={queryInput}
+          onChangeText={setQueryInput}
+          testID="search-products"
+        />
         <div className="mt-2 flex flex-wrap gap-2">
           {categories.map(cat => (
             <FilterChip
               key={cat.id}
               label={cat.name}
-              active={activeCategory === cat.id}
-              onPress={() => setActiveCategory(cat.id)}
+              active={categoryId === cat.id}
+              onPress={() => setCategoryId(categoryId === cat.id ? 'all' : cat.id)}
               testID={`chip-${cat.id}`}
             />
           ))}
@@ -169,21 +168,41 @@ export default function PosTerminalScreen({
             <p className="mb-3 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">{error}</p>
             <button
               className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 py-2.5 text-[var(--font-regular)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-              onClick={() => void loadCatalog()}
+              onClick={() => {
+                reload();
+                void loadCatalog();
+              }}
             >
               Reintentar
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : products.length === 0 ? (
           <p className="pt-12 text-center text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)]">
-            No hay productos para «{query}»
+            No hay productos para «{queryInput}»
           </p>
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {filtered.map(item => (
-              <ProductCard key={item.id} product={item} onPress={() => setSelectedProduct(item)} testID={`product-${item.id}`} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {products.map(item => (
+                <ProductCard key={item.id} product={item} onPress={() => setSelectedProduct(item)} testID={`product-${item.id}`} />
+              ))}
+            </div>
+
+            {/* Paginación: el catálogo se trae por páginas; si el servidor
+                reporta más de los cargados, botón "Cargar más". */}
+            {hasMore && (
+              <div className="mt-6 flex flex-col items-center gap-2">
+                <button
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-6 py-2.5 text-[var(--font-regular)] font-semibold text-[var(--color-text-primary)] hover:opacity-80 disabled:opacity-50"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  data-testid="load-more-products"
+                >
+                  {loadingMore ? 'Cargando…' : `Cargar más (${products.length} de ${total})`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -35,8 +35,9 @@ interface ProductFormSheetProps {
   /** Producto a editar (modo edit); prefill de campos/precios. */
   initial?: Product | null;
   onClose: () => void;
-  /** Recarga el inventario tras crear/editar (padre). */
-  onSaved: () => void;
+  /** Recarga el inventario tras crear/editar (padre). Recibe el id del
+   *  producto guardado para que el padre pueda resaltarlo. */
+  onSaved: (productId?: string) => void;
 }
 
 export default function ProductFormSheet({
@@ -245,7 +246,7 @@ export default function ProductFormSheet({
           ? 'Producto actualizado correctamente.'
           : 'Producto creado correctamente.',
       );
-      onSaved();
+      onSaved(productId);
       onClose();
     } catch (err) {
       const message =

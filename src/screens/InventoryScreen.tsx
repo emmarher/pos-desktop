@@ -7,13 +7,14 @@
  * Los permisos productos:create/update/delete e inventory:adjust vienen
  * del JWT. Si la carga falla se muestra el error real + botón Reintentar.
  */
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Pencil, Settings2, Trash2} from 'lucide-react';
 import type {Category, Product} from '../models';
-import {searchProducts, getCategories, deleteProduct} from '../api/endpoints';
+import {getCategories, deleteProduct} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {toast} from '../hooks/useToast';
 import {useAuthStore} from '../stores/auth.store';
+import {useProductCatalog} from '../hooks/useProductCatalog';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import SearchInput from '../components/SearchInput';
@@ -57,16 +58,34 @@ export default function InventoryScreen({
   onLogout,
   visibleTabs,
 }: InventoryScreenProps) {
-  const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
   const [adjustProduct, setAdjustProduct] = useState<Product | null>(null);
   const [form, setForm] = useState<FormState>({visible: false, mode: 'create'});
   const [categoriesOpen, setCategoriesOpen] = useState(false);
 
-  const [products, setProducts] = useState<Product[]>([]);
+  /* Catálogo: búsqueda + filtro por categoría van al BACKEND y la lista llega
+     paginada. (Antes: limit=100 —recortado a 50 por el server— y filtro en
+     memoria, así que los productos nuevos "C…"/"T…" no aparecían nunca.) */
+  const {
+    products,
+    total,
+    query,
+    queryInput,
+    setQueryInput,
+    categoryId,
+    setCategoryId,
+    loading,
+    loadingMore,
+    error,
+    setError,
+    hasMore,
+    loadMore,
+    reload,
+    highlightId,
+    setHighlightId,
+  } = useProductCatalog();
+
   const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   const user = useAuthStore(s => s.user);
   const canAdjustStock = user?.permissions.includes('inventory:adjust') ?? false;
@@ -76,21 +95,10 @@ export default function InventoryScreen({
   const canManageCategories = user?.permissions.includes('categories:manage') ?? false;
 
   const loadInventory = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    let prodRes;
-    let cats;
     try {
-      [prodRes, cats] = await Promise.all([
-        searchProducts({limit: 50}),
-        getCategories(),
-      ]);
-      setProducts(prodRes.items);
-      setCategories(cats);
+      setCategories(await getCategories());
     } catch (err) {
       setError(errMsg(err));
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -100,25 +108,12 @@ export default function InventoryScreen({
 
   const kpis = useMemo(
     () => ({
-      totalItems: products.length.toLocaleString('es-MX'),
+      totalItems: (query ? products.length : total).toLocaleString('es-MX'),
       outOfStock: String(products.filter(p => p.stock <= 0).length),
       categories: `${categories.length} ${categories.length === 1 ? 'activa' : 'activas'}`,
     }),
-    [products, categories],
+    [products, categories, query, total],
   );
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter(p => {
-      const mCat = activeCategory === 'all' || p.category_id === activeCategory;
-      const mQ =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        (p.sku ?? '').toLowerCase().includes(q) ||
-        (p.internal_code ?? '').toLowerCase().includes(q);
-      return mCat && mQ;
-    });
-  }, [products, query, activeCategory]);
 
   const handleDelete = async (p: Product) => {
     // Confirmación con window.confirm está ok (acción destructiva); el error
@@ -128,13 +123,29 @@ export default function InventoryScreen({
     }
     try {
       await deleteProduct(p.id);
-      void loadInventory();
+      reload();
     } catch (err) {
       toast.error(`Error al eliminar: ${errMsg(err)}`);
     }
   };
 
-  const hasCriticalError = error && products.length === 0;
+  /* Al guardar un producto: recargar y resaltar la fila nueva. */
+  const handleProductSaved = useCallback(
+    (productId?: string) => {
+      reload();
+      setHighlightId(productId ?? null);
+      if (productId) {
+        /* el scroll ocurre tras el render de la lista recargada */
+        window.setTimeout(() => {
+          const el = document.querySelector(`[data-testid="row-${productId}"]`);
+          el?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        }, 400);
+      }
+    },
+    [reload, setHighlightId],
+  );
+
+  const hasCriticalError = !!error && products.length === 0;
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--color-background)]">
@@ -155,11 +166,16 @@ export default function InventoryScreen({
 
       {/* Búsqueda + filtro */}
       <div className="px-4 pt-3">
-        <SearchInput placeholder="Buscar productos, SKUs…" value={query} onChangeText={setQuery} testID="search-inventory" />
+        <SearchInput
+          placeholder="Buscar productos, SKUs…"
+          value={queryInput}
+          onChangeText={setQueryInput}
+          testID="search-inventory"
+        />
         <div className="mt-2 flex flex-wrap gap-2">
-          <FilterChip label="Todos" active={activeCategory === 'all'} onPress={() => setActiveCategory('all')} />
+          <FilterChip label="Todos" active={categoryId === 'all'} onPress={() => setCategoryId('all')} />
           {categories.map(cat => (
-            <FilterChip key={cat.id} label={cat.name} active={activeCategory === cat.id} onPress={() => setActiveCategory(cat.id)} />
+            <FilterChip key={cat.id} label={cat.name} active={categoryId === cat.id} onPress={() => setCategoryId(cat.id)} />
           ))}
           {/* Gestionar categorías (solo con permiso categories:manage) */}
           {canManageCategories && (
@@ -184,7 +200,7 @@ export default function InventoryScreen({
       </div>
 
       {/* Lista */}
-      <div className="flex-1 space-y-2 overflow-y-auto p-4 pb-24">
+      <div className="flex-1 space-y-2 overflow-y-auto p-4 pb-24" ref={listRef}>
         <h3 className="text-[var(--font-medium)] font-bold text-[var(--color-text)]">Catálogo de productos</h3>
 
         {loading ? (
@@ -196,67 +212,88 @@ export default function InventoryScreen({
             <p className="mb-3 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">{error}</p>
             <button
               className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-6 py-2.5 text-[var(--font-regular)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-              onClick={() => void loadInventory()}
+              onClick={() => {
+                reload();
+                void loadInventory();
+              }}
             >
               Reintentar
             </button>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : products.length === 0 ? (
           <p className="py-6 text-center text-[var(--font-regular)] text-[var(--color-text-secondary)]">
-            {error && !hasCriticalError ? error.charAt(0).toUpperCase() + error.slice(1) : `No hay productos para «${query}»`}
+            {error && !hasCriticalError ? error.charAt(0).toUpperCase() + error.slice(1) : `No hay productos para «${queryInput}»`}
           </p>
         ) : (
-          filtered.map(p => (
-            <div
-              key={p.id}
-              className="glass-surface flex w-full items-center gap-3 rounded-[var(--radius-lg)] p-3"
-              data-testid={`row-${p.id}`}
-            >
-              <ProductThumb name={p.name} imagenUrl={p.imagen_url} size={48} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                  {p.name}
+          <>
+            {products.map(p => (
+              <div
+                key={p.id}
+                className={`glass-surface flex w-full items-center gap-3 rounded-[var(--radius-lg)] p-3 transition-shadow ${
+                  highlightId === p.id ? 'ring-2 ring-[var(--color-primary)]' : ''
+                }`}
+                data-testid={`row-${p.id}`}
+              >
+                <ProductThumb name={p.name} imagenUrl={p.imagen_url} size={48} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                    {p.name}
+                  </span>
+                  <span className="block text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                    {p.sku ?? p.internal_code} · Stock: {p.stock}
+                  </span>
                 </span>
-                <span className="block text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                  {p.sku ?? p.internal_code} · Stock: {p.stock}
-                </span>
-              </span>
-              <StatusChip status={stockStatus(p)} testID={`status-${p.id}`} />
+                <StatusChip status={stockStatus(p)} testID={`status-${p.id}`} />
 
-              {/* Acciones por fila */}
-              <div className="flex shrink-0 items-center gap-1">
-                {canAdjustStock && (
-                  <button
-                    className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/60 px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
-                    onClick={() => setAdjustProduct(p)}
-                    data-testid={`ajustar-${p.id}`}
-                  >
-                    Ajustar stock
-                  </button>
-                )}
-                {canEditProduct && (
-                  <button
-                    className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-primary)]"
-                    onClick={() => setForm({visible: true, mode: 'edit', initial: p})}
-                    title="Editar producto"
-                    data-testid={`editar-${p.id}`}
-                  >
-                    <Pencil size={16} />
-                  </button>
-                )}
-                {canDeleteProduct && (
-                  <button
-                    className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-danger)]"
-                    onClick={() => void handleDelete(p)}
-                    title="Eliminar producto"
-                    data-testid={`eliminar-${p.id}`}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
+                {/* Acciones por fila */}
+                <div className="flex shrink-0 items-center gap-1">
+                  {canAdjustStock && (
+                    <button
+                      className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/60 px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
+                      onClick={() => setAdjustProduct(p)}
+                      data-testid={`ajustar-${p.id}`}
+                    >
+                      Ajustar stock
+                    </button>
+                  )}
+                  {canEditProduct && (
+                    <button
+                      className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-primary)]"
+                      onClick={() => setForm({visible: true, mode: 'edit', initial: p})}
+                      title="Editar producto"
+                      data-testid={`editar-${p.id}`}
+                    >
+                      <Pencil size={16} />
+                    </button>
+                  )}
+                  {canDeleteProduct && (
+                    <button
+                      className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] text-[var(--color-text-secondary)] transition-colors hover:text-[var(--color-danger)]"
+                      onClick={() => void handleDelete(p)}
+                      title="Eliminar producto"
+                      data-testid={`eliminar-${p.id}`}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))
+            ))}
+
+            {/* Paginación: botón "Cargar más" si el servidor reporta más. */}
+            {hasMore && (
+              <div className="flex justify-center py-4">
+                <button
+                  className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-6 py-2.5 text-[var(--font-regular)] font-semibold text-[var(--color-text-primary)] hover:opacity-80 disabled:opacity-50"
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  data-testid="load-more-inventory"
+                >
+                  {loadingMore ? 'Cargando…' : `Cargar más (${products.length} de ${total})`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -271,13 +308,13 @@ export default function InventoryScreen({
           mode={form.mode}
           initial={form.mode === 'edit' ? form.initial : null}
           onClose={() => setForm({visible: false, mode: 'create', initial: null})}
-          onSaved={loadInventory}
+          onSaved={handleProductSaved}
         />
       )}
 
       {/* Ajustar stock */}
       {canAdjustStock && (
-        <AdjustStockSheet product={adjustProduct} onClose={() => setAdjustProduct(null)} onAdjusted={loadInventory} />
+        <AdjustStockSheet product={adjustProduct} onClose={() => setAdjustProduct(null)} onAdjusted={reload} />
       )}
 
       {/* FAB crear producto (solo con permiso) */}
