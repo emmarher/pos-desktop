@@ -38,7 +38,7 @@
    ═══════════════════════════════════════════════════════════════ */
 html[data-theme='light'] {
   /* ── Identidad corporativa (INALTERABLES) ── */
-  --color-background: #fcfdf2;
+  --color-background: #fffffea7;
   --color-surface: rgba(252, 223, 212, 0.55);
   --color-surface-solid: #ffffff;
   --color-input: rgba(255, 255, 255, 0.92);
