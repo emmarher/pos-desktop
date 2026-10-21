@@ -5,6 +5,19 @@ Todas las versiones notables de **pos-desktop** se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.1.0/).
 Este proyecto usa [Semantic Versioning](https://semver.org/).
 
+## [0.2.5] — 2026-10-21 — El color de la categoría se asigna automáticamente
+
+### Cambiado
+
+- **El selector de color de la etiqueta queda deshabilitado** (`CategorySheet.tsx`).
+  El color ya no se elige a mano: al crear una categoría nueva se asigna **automáticamente**
+  el primer color libre de la paleta (para que cada categoría sea distinguible de un
+  vistazo); al editar se conserva el que ya tenía.
+  - El bloque JSX del selector queda comentado, con instrucciones para reactivarlo.
+  - En su lugar se muestra el color asignado en **solo lectura** ("Asignado automáticamente").
+  - Nuevo helper `pickAutoColor()`: primer color de la paleta no usado por otra categoría;
+    si la paleta se agota, reutiliza el primero.
+
 ## [0.2.4] — 2026-10-21 — Catálogo contra el backend, ajuste de stock editable y detalle de venta en Reportes
 
 ### Corregido

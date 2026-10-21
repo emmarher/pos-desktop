@@ -58,6 +58,17 @@ El catálogo (Caja e Inventario) **no se trae entero de una vez**: se pagina con
   **"Cargar más (X de Y)"** mientras queden resultados (`total`).
 - Al crear o editar un producto, la fila se **resalta y se hace scroll** hasta ella.
 
+## Categorías: color automático
+
+El color de la etiqueta **no se elige a mano**: el selector está deshabilitado en
+`src/components/CategorySheet.tsx` (el bloque JSX queda comentado, listo para reactivarse).
+
+- Al **crear** una categoría se asigna automáticamente el **primer color libre de la paleta**
+  (`pickAutoColor()`), para que cada categoría sea distinguible de un vistazo. Si la paleta se
+  agota, se reutiliza el primero.
+- Al **editar** se conserva el color que ya tenía.
+- El formulario muestra el color asignado en **solo lectura** ("Asignado automáticamente").
+
 ## Garantía de calidad
 
 Todo el código debe estar **optimizado para que la app no crashee, no tenga lag y ofrezca una UX fluida**. Ver requisitos en [AGENTS.md](./AGENTS.md) y en la [skill `pos-desktop`](./.opencode/skills/pos-desktop/SKILL.md).
