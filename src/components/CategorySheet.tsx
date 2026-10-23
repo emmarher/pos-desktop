@@ -215,7 +215,7 @@ export default function CategorySheet({onClose, onChanged}: CategorySheetProps) 
           )}
 
           {/* Color — solo lectura: se asigna automáticamente (ver openCreate). */}
-          <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+          {/* <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
             Color
           </label>
           <div className="flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2">
@@ -227,7 +227,7 @@ export default function CategorySheet({onClose, onChanged}: CategorySheetProps) 
             <span className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
               Asignado automáticamente
             </span>
-          </div>
+          </div> */}
 
           {/*
             Selector de color deshabilitado.

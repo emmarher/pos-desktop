@@ -193,7 +193,7 @@ export default function InventoryScreen({
 
         {/* KPIs */}
         <div className="mt-3 flex gap-2">
-          <KpiCard label="Total items" value={kpis.totalItems} />
+          <KpiCard label="Total productos" value={kpis.totalItems} />
           <KpiCard label="Agotados" value={kpis.outOfStock} alert={Number(kpis.outOfStock) > 0} />
           <KpiCard label="Categorías" value={kpis.categories} />
         </div>
