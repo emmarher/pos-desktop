@@ -18,8 +18,8 @@
  *   - className?: clases extra para el contenedor.
  * ────────────────────────────────────────────────────────────────────────
  */
-import {memo, useEffect, useMemo, useState} from 'react';
-import {resolveImageUrl} from '../lib/images';
+import {memo, useEffect, useState} from 'react';
+import {useResolvedImageUrl} from '../lib/images';
 
 interface ProductThumbProps {
   name: string;
@@ -30,8 +30,9 @@ interface ProductThumbProps {
 }
 
 function ProductThumbBase({name, imagenUrl, size = 44, className = ''}: ProductThumbProps) {
-  /* URL absoluta resuelta contra el servidor (memoizada por si el store cambia). */
-  const url = useMemo(() => resolveImageUrl(imagenUrl), [imagenUrl]);
+  /* URL absoluta REACTIVA: se recalcula cuando el servidor se hidrata
+     (arranque en frío con sesión guardada) o cambia de IP/puerto. */
+  const url = useResolvedImageUrl(imagenUrl);
 
   /* Si la descarga falla (servidor caído, 404), volvemos al placeholder. */
   const [failed, setFailed] = useState(false);

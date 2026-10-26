@@ -26,7 +26,7 @@ import {
   uploadProductImage,
 } from '../api/endpoints';
 import {ApiError} from '../api/client';
-import {resolveImageUrl} from '../lib/images';
+import {useResolvedImageUrl} from '../lib/images';
 import {toast} from '../hooks/useToast';
 import POSButton from './POSButton';
 
@@ -67,7 +67,17 @@ export default function ProductFormSheet({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   /** true cuando el usuario quitó la imagen existente (modo edit). */
   const [imageRemoved, setImageRemoved] = useState(false);
+  /** true si la imagen remota no cargó (404/servidor caído) → placeholder. */
+  const [remoteBroken, setRemoteBroken] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  /* Imagen YA guardada en el backend, resuelta de forma REACTIVA: si el
+     servidor se hidrata después del primer render, el preview aparece solo. */
+  const remotePreview = useResolvedImageUrl(
+    mode === 'edit' && !imageRemoved ? initial?.imagen_url : null,
+  );
+  /** Lo que se pinta: archivo nuevo (object URL) > imagen del backend > nada. */
+  const previewSrc = imagePreview ?? (remoteBroken ? null : remotePreview);
 
   /* Errores inline por campo (validación visible, no window.alert). */
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -106,7 +116,7 @@ export default function ProductFormSheet({
       /* Imagen existente (solo preview; sin archivo local). */
       setImageFile(null);
       setImageRemoved(false);
-      setImagePreview(resolveImageUrl(initial.imagen_url));
+      setImagePreview(null);
     } else {
       setName('');
       setCategoryId(null);
@@ -129,6 +139,10 @@ export default function ProductFormSheet({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Si cambia la imagen remota (otro producto, servidor hidratado), el
+     fallo previo deja de ser válido: se reintenta la descarga. */
+  useEffect(() => setRemoteBroken(false), [remotePreview]);
 
   /* ── Manejo de imagen ────────────────────────────────────────────── */
 
@@ -303,12 +317,19 @@ export default function ProductFormSheet({
           <div className="flex items-center gap-3">
             {/* Preview 96px: foto actual/nueva o placeholder con inicial */}
             <span className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius-md)] bg-[var(--color-primary-soft)]">
-              {imagePreview ? (
+              {previewSrc ? (
                 <img
-                  src={imagePreview}
+                  src={previewSrc}
                   alt={name || 'Imagen del producto'}
                   className="h-full w-full object-cover"
-                  onError={() => setImagePreview(null)}
+                  onError={() => {
+                    if (imagePreview) {
+                      /* object URL local ilegible: se descarta. */
+                      setImagePreview(null);
+                    } else {
+                      setRemoteBroken(true);
+                    }
+                  }}
                 />
               ) : (
                 <span className="text-4xl font-black text-[var(--color-primary)]">
@@ -336,9 +357,9 @@ export default function ProductFormSheet({
                 data-testid="pf-image-pick"
               >
                 <ImagePlus size={15} />
-                {imagePreview ? 'Cambiar imagen' : 'Agregar imagen'}
+                {previewSrc ? 'Cambiar imagen' : 'Agregar imagen'}
               </button>
-              {(imagePreview || imageFile || imageRemoved) && (
+              {(previewSrc || imageFile || imageRemoved) && (
                 <button
                   type="button"
                   className="flex w-fit items-center gap-1.5 px-1 text-[var(--font-small)] font-semibold text-[var(--color-danger)] transition-colors hover:text-[var(--color-primary)]"
@@ -364,7 +385,7 @@ export default function ProductFormSheet({
                 key={c.id}
                 className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
                   categoryId === c.id
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/40 text-[var(--color-on-primary)]'
                     : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
                 }`}
                 onClick={() => setCategoryId(c.id)}
@@ -390,7 +411,7 @@ export default function ProductFormSheet({
                   key={u.id}
                   className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
                     baseUnitId === u.id
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/40 text-[var(--color-on-primary)]'
                       : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'
                   }`}
                   onClick={() => {

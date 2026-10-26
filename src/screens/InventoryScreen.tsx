@@ -201,7 +201,7 @@ export default function InventoryScreen({
 
       {/* Lista */}
       <div className="flex-1 space-y-2 overflow-y-auto p-4 pb-24" ref={listRef}>
-        <h3 className="text-[var(--font-medium)] font-bold text-[var(--color-text)]">Catálogo de productos</h3>
+        <h3 className="text-[var(--font-medium)] font-bold text-[var(--color-text)]">Catálogo de producto </h3>
 
         {loading ? (
           <p className="py-6 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
@@ -249,7 +249,7 @@ export default function InventoryScreen({
                 <div className="flex shrink-0 items-center gap-1">
                   {canAdjustStock && (
                     <button
-                      className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/60 px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]"
+                      className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/60 px-3 py-2 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] transition-colors hover:bg-[var(--color-primary-dark)]/20"
                       onClick={() => setAdjustProduct(p)}
                       data-testid={`ajustar-${p.id}`}
                     >

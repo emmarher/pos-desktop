@@ -11,6 +11,7 @@ import {useEffect, useState} from 'react';
 import {BrowserRouter} from 'react-router-dom';
 import SplashScreen from './components/SplashScreen';
 import {useAuthStore} from './stores/auth.store';
+import {hydrateServerStore} from './lib/serverBase';
 import AppRoutes from './navigation/AppRoutes';
 
 export default function App() {
@@ -25,6 +26,11 @@ export default function App() {
     
     (async () => {
       try {
+        /* 1) Servidor persistido → store (miniaturas/imágenes lo necesitan
+              de forma síncrona; sin esto, tras reiniciar la app con sesión
+              guardada todas las fotos caían al placeholder). */
+        await hydrateServerStore();
+        /* 2) Sesión guardada. */
         await restoreSession();
       } catch {
         /* fallo de arranque: se ignora y se va a la pantalla de conexión */

@@ -38,7 +38,7 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   VOUCHER: 'Voucher',
 };
 
-const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'CREDIT'];
+const METHODS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER'];
 
 export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: CartSheetProps) {
   const items = useCartStore(s => s.items);
@@ -255,12 +255,12 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
         <p className="mb-1 text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
           Método de pago
         </p>
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-2  flex flex-wrap gap-1">
           {METHODS.map(m => (
             <button
               key={m}
               onClick={() => setMethod(m)}
-              className={`rounded-[var(--radius-round)] border px-3 py-1.5 text-[var(--font-small)] font-semibold transition-colors ${
+              className={`rounded-[var(--radius-round)] border px-2  py-1.5 text-[var(--font-small)] transition-colors ${
                 method === m
                   ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/50 text-[var(--color-on-primary)]'
                   : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)]'

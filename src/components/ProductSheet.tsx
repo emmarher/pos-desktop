@@ -14,7 +14,7 @@ import {useEffect, useRef, useState} from 'react';
 import {Minus, Plus, RefreshCw, Scale} from 'lucide-react';
 import type {PriceType, Product} from '../models';
 import {getProductPrices, type ProductPriceOption} from '../constants/prices';
-import {resolveImageUrl} from '../lib/images';
+import {useResolvedImageUrl} from '../lib/images';
 import {
   isMassProduct,
   isCajProduct,
@@ -79,6 +79,10 @@ export default function ProductSheet({
     }
   }, [product?.id]);
 
+  /* Imagen del producto resuelta de forma REACTIVA (se rehace cuando el
+     servidor se hidrata al arrancar). Hook ANTES del early-return. */
+  const imageUrl = useResolvedImageUrl(product?.imagen_url);
+
   if (!product) return null;
 
   /* Detectar tipo de producto (ya sabemos que product no es null) */
@@ -88,7 +92,6 @@ export default function ProductSheet({
   const effectiveScaleDeviceId = propScaleDeviceId ?? getScaleDeviceId();
 
   const outOfStock = product.stock <= 0;
-  const imageUrl = resolveImageUrl(product.imagen_url);
   const availablePrices = getProductPrices(product, priceTypes);
   const selectedPrice =
     availablePrices.find(p => p.priceType.id === selectedPriceId) ?? availablePrices[0];

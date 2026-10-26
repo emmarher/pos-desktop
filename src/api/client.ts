@@ -14,9 +14,7 @@
  * ────────────────────────────────────────────────────────────────────────
  */
 import {invoke} from '@tauri-apps/api/core';
-import {useServerStore} from '../stores/server.store';
-import AsyncStorage from '../lib/storage';
-import {STORAGE_SERVER_IP, STORAGE_SERVER_PORT} from '../constants/app';
+import {resolveServerInfo} from '../lib/serverBase';
 
 export class ApiError extends Error {
   status: number;
@@ -77,27 +75,6 @@ export async function syncTokenToRust(token: string | null): Promise<void> {
  * Ejecuta una petición HTTP vía Rust (api_request).
  * Arma la cabecera de auth desde el token de Rust (no del webview).
  */
-type ServerInfo = {ip: string; port: number};
-
-async function resolveServer(): Promise<ServerInfo | null> {
-  const store = useServerStore.getState();
-  if (store.server?.ip) return store.server as ServerInfo;
-  const ip = (await AsyncStorage.getItem(STORAGE_SERVER_IP)) ?? '';
-  const portRaw = await AsyncStorage.getItem(STORAGE_SERVER_PORT);
-  const port = portRaw ? parseInt(portRaw, 10) : 3000;
-  if (ip) return {ip, port};
-  // Fallback dev misma máquina: sin IP configurada, probar 127.0.0.1 (evita wizard vacío)
-  // Solo en dev (import.meta.env.DEV) para no ocultar mala config en prod.
-  try {
-    // @ts-ignore import.meta env
-    if (import.meta.env?.DEV) {
-      return {ip: '127.0.0.1', port: 3000};
-    }
-  } catch {
-    /* no vite env */
-  }
-  return null;
-}
 
 export async function apiRequest<T>(
   path: string,
@@ -110,7 +87,7 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const {method = 'GET', body, auth = true} = options;
 
-  const server = await resolveServer();
+  const server = await resolveServerInfo();
   if (!server?.ip) {
     throw new NetworkError('Servidor no configurado');
   }
@@ -209,7 +186,7 @@ export async function apiUploadFile<T>(
   file: {name: string; mime: string; bytes: ArrayBuffer},
   options: {retried?: boolean} = {},
 ): Promise<T> {
-  const server = await resolveServer();
+  const server = await resolveServerInfo();
   if (!server?.ip) {
     throw new NetworkError('Servidor no configurado');
   }
