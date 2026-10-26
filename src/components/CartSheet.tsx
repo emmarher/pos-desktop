@@ -15,6 +15,7 @@ import type {CartItem, PaymentMethod} from '../models';
 import {createSale} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {toast} from '../hooks/useToast';
+import {confirmAction} from '../lib/confirm';
 import POSButton from './POSButton';
 import {formatWeightKg} from '../lib/scale';
 import {buildTicket80mm} from '../lib/ticket';
@@ -63,6 +64,17 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
   const handleConfirm = async () => {
     if (items.length === 0) return;
+
+    /* Pregunta simple y ANTES de tocar el carrito: si el cajero cancela, el
+       pago no debe quedar aplicado (addPayment se hace ya confirmado). */
+    const ok = await confirmAction({
+      icon: 'check',
+      title: 'Confirmar venta',
+      message: `¿Cobrar $${total.toFixed(2)} en ${METHOD_LABELS[method].toLowerCase()}?`,
+      confirmLabel: 'Cobrar',
+    });
+    if (!ok) return;
+
     const existing = payments.reduce((s, p) => s + p.amount, 0);
     const remaining = Math.max(0, total - existing);
     if (remaining > 0) {

@@ -11,7 +11,7 @@ export interface POSButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> 
   onPress?: () => void;
   loading?: boolean;
   large?: boolean;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'success' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'success' | 'danger' | 'dangerSolid';
   'data-testid'?: string;
 }
 
@@ -39,6 +39,9 @@ export default function POSButton({
 
   const dangerClass = 'border border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger-soft)] focus:ring-danger-500';
 
+  /* Acción destructiva principal (ej. "Eliminar" en el diálogo de confirmación). */
+  const dangerSolidClass = 'bg-[var(--color-danger)] text-[var(--color-on-primary)] hover:opacity-90 focus:ring-danger-500';
+
   const baseClasses = `${commonClass} focus-outline-none`;
 
   const largeClasses = large ? 'px-6 py-3 text-lg' : 'px-4 py-2 text-sm';
@@ -53,7 +56,9 @@ export default function POSButton({
           ? successClass
           : variant === 'danger'
             ? dangerClass
-            : '';
+            : variant === 'dangerSolid'
+              ? dangerSolidClass
+              : '';
 
   const fullClass = `${baseClasses} ${variantClasses} ${largeClasses} ${className}`.trim();
 

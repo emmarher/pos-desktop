@@ -14,6 +14,7 @@ import {useAuthStore} from '../stores/auth.store';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
 import TopAppBar from '../components/TopAppBar';
 import {toast} from '../hooks/useToast';
+import {promptAction} from '../lib/confirm';
 import {
   getMyTickets,
   cancelSale,
@@ -33,63 +34,6 @@ interface TicketsScreenProps {
 const fmt = (n: number) =>
   n.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-/** Input de motivo para cancelación (modal). */
-function CancelReasonDialog({
-  visible,
-  onClose,
-  onConfirm,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onConfirm: (reason: string) => void;
-}) {
-  const [reason, setReason] = useState('');
-  if (!visible) return null;
-  const handleConfirm = () => {
-    const trimmed = reason.trim();
-    if (!trimmed) {
-      toast.error('Debe ingresar un motivo para cancelar.');
-      return;
-    }
-    onConfirm(trimmed);
-    setReason('');
-  };
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="w-full max-w-sm rounded-[var(--radius-xl)] bg-[var(--color-surface-solid)] p-6">
-        <h3 className="mb-3 text-[var(--font-medium)] font-extrabold text-[var(--color-text)]">
-          Cancelar venta
-        </h3>
-        <p className="mb-3 text-[var(--font-small)] text-[var(--color-text-secondary)]">
-          Ingrese el motivo de la cancelación:
-        </p>
-        <textarea
-          className="mb-4 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2 text-[var(--font-regular)] text-[var(--color-text)] outline-none"
-          placeholder="Ej: Producto defectuoso, error de cobro..."
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          rows={3}
-          maxLength={500}
-        />
-        <div className="flex gap-3">
-          <button
-            className="flex-1 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-soft)]"
-            onClick={onClose}
-          >
-            Cancelar
-          </button>
-          <button
-            className="flex-1 rounded-[var(--radius-md)] bg-[var(--color-danger)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-            onClick={handleConfirm}
-          >
-            Confirmar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function TicketsScreen({
   activeTab,
   onTabChange,
@@ -108,8 +52,7 @@ export default function TicketsScreen({
   const [folioQuery, setFolioQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
-  const [cancelSaleId, setCancelSaleId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
 
   /* Fecha por defecto: desde inicio de hoy hasta ahora */
@@ -184,18 +127,37 @@ export default function TicketsScreen({
     }
   };
 
-  const handleCancel = async (reason: string) => {
-    if (!cancelSaleId) return;
+  /* Cancelar exige motivo (sales:cancel): se pide con el diálogo global de la app. */
+  const handleCancel = async (saleId: string) => {
+    const reason = await promptAction({
+      tone: 'danger',
+      icon: 'alert',
+      title: 'Cancelar venta',
+      message: 'La venta quedará anulada y el stock se reintegrará.',
+      input: {
+        label: 'Motivo de cancelación',
+        placeholder: 'Ej: error de cobro, producto defectuoso…',
+        required: true,
+        requiredMessage: 'Debe ingresar un motivo para cancelar.',
+        maxLength: 500,
+      },
+      confirmLabel: 'Cancelar venta',
+      cancelLabel: 'Volver',
+      /* No cerrar al click fuera: hay texto escrito que se perdería. */
+      dismissOnBackdrop: false,
+    });
+    if (!reason) return;
+
+    setCancellingId(saleId);
     try {
-      await cancelSale(cancelSaleId, reason);
+      await cancelSale(saleId, reason);
       toast.success('Venta cancelada. Stock reintegrado.');
       void loadTickets(true);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : String(err);
       toast.error(`No se pudo cancelar: ${msg}`);
     } finally {
-      setCancelDialogOpen(false);
-      setCancelSaleId(null);
+      setCancellingId(null);
     }
   };
 
@@ -352,11 +314,9 @@ export default function TicketsScreen({
                   </button>
                   {canCancel && s.status !== 'CANCELLED' && (
                     <button
-                      className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)]"
-                      onClick={() => {
-                        setCancelSaleId(s.id);
-                        setCancelDialogOpen(true);
-                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-md)] text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-danger-soft)] hover:text-[var(--color-danger)] disabled:opacity-40"
+                      onClick={() => void handleCancel(s.id)}
+                      disabled={cancellingId === s.id}
                       title="Cancelar venta (Admin)"
                       data-testid={`cancel-${s.id}`}
                     >
@@ -381,15 +341,6 @@ export default function TicketsScreen({
           </div>
         )}
       </div>
-
-      <CancelReasonDialog
-        visible={cancelDialogOpen}
-        onClose={() => {
-          setCancelDialogOpen(false);
-          setCancelSaleId(null);
-        }}
-        onConfirm={handleCancel}
-      />
 
       <SaleDetailDialog saleId={detailSaleId} onClose={() => setDetailSaleId(null)} />
 

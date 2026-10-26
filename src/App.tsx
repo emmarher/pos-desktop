@@ -13,6 +13,7 @@ import SplashScreen from './components/SplashScreen';
 import {useAuthStore} from './stores/auth.store';
 import {hydrateServerStore} from './lib/serverBase';
 import AppRoutes from './navigation/AppRoutes';
+import ConfirmDialog from './components/ConfirmDialog';
 
 export default function App() {
   const [booting, setBooting] = useState(true);
@@ -62,6 +63,7 @@ export default function App() {
       ) : (
         <BrowserRouter>
           <AppRoutes />
+          <ConfirmDialog />
         </BrowserRouter>
       )}
     </div>

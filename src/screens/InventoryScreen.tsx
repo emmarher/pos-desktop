@@ -13,6 +13,7 @@ import type {Category, Product} from '../models';
 import {getCategories, deleteProduct} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {toast} from '../hooks/useToast';
+import {confirmAction} from '../lib/confirm';
 import {useAuthStore} from '../stores/auth.store';
 import {useProductCatalog} from '../hooks/useProductCatalog';
 import BottomNavBar, {NavTab} from '../components/BottomNavBar';
@@ -116,11 +117,16 @@ export default function InventoryScreen({
   );
 
   const handleDelete = async (p: Product) => {
-    // Confirmación con window.confirm está ok (acción destructiva); el error
+    // Confirmación con el diálogo glass de la app (no window.confirm); el error
     // se notifica vía toast (no window.alert).
-    if (!window.confirm(`¿Eliminar "${p.name}" del catálogo? Esta acción es permanente.`)) {
-      return;
-    }
+    const ok = await confirmAction({
+      tone: 'danger',
+      icon: 'trash',
+      title: 'Eliminar producto',
+      message: `"${p.name}" se quitará del catálogo. Esta acción es permanente.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!ok) return;
     try {
       await deleteProduct(p.id);
       reload();
