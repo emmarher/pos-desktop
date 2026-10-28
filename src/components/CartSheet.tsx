@@ -20,6 +20,8 @@ import POSButton from './POSButton';
 import {formatWeightKg} from '../lib/scale';
 import {buildTicket80mm} from '../lib/ticket';
 import {printTicketDirect, getPersistedUsbPrinter} from '../services/hardware';
+import ShareTicketDialog from './ShareTicketDialog';
+import type {TicketPreviewData} from './TicketPreview';
 import {useAuthStore} from '../stores/auth.store';
 
 interface CartSheetProps {
@@ -51,6 +53,8 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [submitting, setSubmitting] = useState(false);
+  // Ticket para compartir cuando no se pudo imprimir.
+  const [shareData, setShareData] = useState<TicketPreviewData | null>(null);
 
   useEffect(() => {
     if (!collapsed) setMethod('CASH');
@@ -90,6 +94,7 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
     const tenant = useAuthStore.getState().tenant;
     const user = useAuthStore.getState().user;
+    const license = useAuthStore.getState().license;
 
     setSubmitting(true);
     try {
@@ -128,7 +133,8 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
       if (persisted?.printerName) {
         try {
           const ticket = buildTicket80mm({
-            businessName: tenant?.business_name ?? 'PUNTO DE VENTA',
+            // Nombre firmado en la licencia (D1); business_name como fallback.
+            businessName: license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
             businessAddress: tenant?.address ?? null,
             businessPhone: tenant?.phone ?? null,
             folio,
@@ -148,6 +154,33 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
           console.warn('[CartSheet] fallo impresión directa USB 80mm', printErr);
           printError =
             printErr instanceof Error ? printErr.message : String(printErr ?? '');
+          // La venta quedó registrada: ofrecer el ticket en PNG/PDF.
+          setShareData({
+            businessName:
+              license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
+            businessAddress: tenant?.address ?? null,
+            businessPhone: tenant?.phone ?? null,
+            logoUrl: tenant?.logo_url ?? null,
+            folio,
+            createdAt: (sale as unknown as {created_at?: string})?.created_at ?? new Date().toISOString(),
+            cashierName: user?.name ?? null,
+            items: snapshotItems.map(it => ({
+              name: it.product.name,
+              qty: it.isCaj
+                ? `1 caja × ${formatWeightKg(it.weightKg ?? 0)} kg`
+                : it.weightKg != null
+                  ? `${formatWeightKg(it.weightKg)} kg`
+                  : `${it.quantity}`,
+              unitPrice: it.unitPrice,
+              subtotal: it.subtotal,
+            })),
+            subtotal: snapshotSubtotal,
+            discount: snapshotDiscount,
+            total: snapshotTotal,
+            payments: snapshotPayments.map(p => ({method: p.method, amount: p.amount})),
+            change: (sale as unknown as {payment_change?: number})?.payment_change,
+            footer: tenant?.receipt_footer ?? null,
+          });
         }
       }
 
@@ -165,7 +198,7 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
         }
       } else {
         toast.success(`Venta registrada · Folio: ${folio}`);
-        toast.error('Sin impresora: Configura USB 80mm en Hardware');
+        toast.error('Sin impresora: configura USB 80mm o comparte el ticket desde Tickets');
       }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'No se pudo registrar la venta.';
@@ -297,6 +330,8 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
           <span className="text-[var(--font-medium)] font-extrabold text-[var(--color-text)]">TOTAL</span>
           <span className="text-[var(--font-xlarge)] font-black text-[var(--color-primary)]">${total.toFixed(2)}</span>
         </div>
+
+        <ShareTicketDialog data={shareData} onClose={() => setShareData(null)} />
 
         <POSButton
           title={submitting ? 'Registrando…' : 'Confirmar venta'}

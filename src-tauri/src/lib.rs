@@ -23,6 +23,7 @@
 //!   - hardware.rs orquestador delegado (poll print-jobs + báscula)
 
 mod api;
+mod files;
 mod hardware;
 mod mdns;
 mod net;
@@ -124,6 +125,7 @@ pub fn run() {
             api::api_set_token,
             api::api_request,
             api::api_upload_file,
+            files::save_file_base64,
             serial::list_ports,
             serial::open_port,
             serial::close_port,

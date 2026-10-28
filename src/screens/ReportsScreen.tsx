@@ -173,191 +173,194 @@ export default function ReportsScreen({
           </p>
         ) : (
           <>
-            {/* KPIs */}
+            {/* KPIs y desgloses en cuadrícula responsiva */}
             <h3 className="text-[var(--font-medium)] font-bold text-[var(--color-text)]">Vista general</h3>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <KpiCard
                 label="Ventas hoy"
                 value={`$${fmt(todayTotal)}`}
                 trend={delta >= 0 ? `+${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`}
               />
               <KpiCard label="Ticket promedio" value={`$${fmt(avgTicket)}`} />
-            </div>
-            <div className="flex gap-2">
               <KpiCard label="Ventas ayer" value={`$${fmt(yestTotal)}`} />
               <KpiCard label="Transacciones" value={String(stats?.today.transactions ?? 0)} />
+
+              {/* Desglose por método */}
+              <GlassSurface className="p-2">
+                <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">Ventas por método</h4>
+                {stats && stats.by_payment_method.length > 0 ? (
+                  stats.by_payment_method.map(m => (
+                    <div key={m.method} className="flex items-center justify-between border-b border-[var(--color-border)] py-2">
+                      <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                        {METHOD_LABELS[m.method] ?? m.method}
+                      </span>
+                      <span className="text-[var(--font-regular)] font-bold text-[var(--color-text)]">${fmt(m.total)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">Sin ventas hoy</p>
+                )}
+              </GlassSurface>
+
+              {/* Desglose por categoría */}
+              <GlassSurface className="p-4">
+                <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">Ventas por categoría</h4>
+                {stats && stats.by_category.length > 0 ? (
+                  stats.by_category.map(c => (
+                    <div key={c.category_id ?? 'sin-cat'} className="flex items-center justify-between border-b border-[var(--color-border)] py-2">
+                      <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                        {c.category_name ?? 'Sin categoría'}
+                      </span>
+                      <span className="text-[var(--font-regular)] font-bold text-[var(--color-text)]">${fmt(c.total)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">Sin datos por categoría</p>
+                )}
+              </GlassSurface>
             </div>
 
-            {/* Desglose por método */}
-            <GlassSurface className="p-4">
-              <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">Ventas por método</h4>
-              {stats && stats.by_payment_method.length > 0 ? (
-                stats.by_payment_method.map(m => (
-                  <div key={m.method} className="flex items-center justify-between border-b border-[var(--color-border)] py-2">
-                    <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                      {METHOD_LABELS[m.method] ?? m.method}
-                    </span>
-                    <span className="text-[var(--font-regular)] font-bold text-[var(--color-text)]">${fmt(m.total)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">Sin ventas hoy</p>
-              )}
-            </GlassSurface>
+            {/* Separador entre el resumen y el detalle */}
+            <div className="border-t border-[var(--color-border)]" />
 
-            {/* Desglose por categoría */}
-            <GlassSurface className="p-4">
-              <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">Ventas por categoría</h4>
-              {stats && stats.by_category.length > 0 ? (
-                stats.by_category.map(c => (
-                  <div key={c.category_id ?? 'sin-cat'} className="flex items-center justify-between border-b border-[var(--color-border)] py-2">
-                    <span className="text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                      {c.category_name ?? 'Sin categoría'}
-                    </span>
-                    <span className="text-[var(--font-regular)] font-bold text-[var(--color-text)]">${fmt(c.total)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">Sin datos por categoría</p>
-              )}
-            </GlassSurface>
-
-            {/* Ranking de productos más vendidos */}
-            <GlassSurface className="p-4" data-testid="top-products">
-              <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">
-                Productos más vendidos
-              </h4>
-              {topLoading ? (
-                <p className="py-4 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                  Cargando ranking…
-                </p>
-              ) : topError ? (
-                <div className="py-2 text-center">
-                  <p className="mb-2 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">
-                    {topError}
-                  </p>
-                  <button
-                    className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-                    onClick={() => void loadTopProducts()}
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              ) : topProducts.length > 0 ? (
-                <div className="divide-y divide-[var(--color-border)]">
-                  {topProducts.map((p, i) => (
-                    <div key={p.product_id} className="flex items-center justify-between gap-3 py-2">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-soft)] text-[var(--font-micro)] font-bold text-[var(--color-primary)]">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
-                            {p.product_name}
-                          </p>
-                          <p className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
-                            {fmtQty(p.units)} unidades · {p.tickets} tickets
-                          </p>
-                        </div>
-                      </div>
-                      <span className="shrink-0 text-[var(--font-regular)] font-bold text-[var(--color-text)]">
-                        ${fmt(p.revenue)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                  Sin ventas en el rango seleccionado.
-                </p>
-              )}
-            </GlassSurface>
-
-            {/* Historial de ventas con filtro de fecha (RF-PR-005) */}
-            <GlassSurface className="p-4">
-              <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">
-                Ventas del día
-              </h4>
-
-              {/* Filtro de rango de fechas */}
-              <div className="mb-3 flex flex-wrap items-end gap-3">
-                <div className="flex flex-col">
-                  <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">Desde</label>
-                  <input
-                    type="date"
-                    className="mt-1 w-36 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5 text-[var(--font-small)] text-[var(--color-text)] outline-none"
-                    value={dateFrom ? dateFrom.split('T')[0] : ''}
-                    onChange={e => setDateFrom(e.target.value ? `${e.target.value}T00:00:00.000Z` : '')}
-                    data-testid="filter-date-from"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">Hasta</label>
-                  <input
-                    type="date"
-                    className="mt-1 w-36 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5 text-[var(--font-small)] text-[var(--color-text)] outline-none"
-                    value={dateTo ? dateTo.split('T')[0] : ''}
-                    onChange={e => setDateTo(e.target.value ? `${e.target.value}T23:59:59.999Z` : '')}
-                    data-testid="filter-date-to"
-                  />
-                </div>
-                <button
-                  className="rounded-[var(--radius-md)] bg-[var(--color-primary)]/50 px-3 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-                  onClick={handleFilterClick}
-                  data-testid="btn-filter-reports"
-                >
-                  Aplicar
-                </button>
+            {/* Filtro de rango de fechas a ancho completo */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex min-w-36 flex-1 flex-col">
+                <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">Desde</label>
+                <input
+                  type="date"
+                  className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5 text-[var(--font-small)] text-[var(--color-text)] outline-none"
+                  value={dateFrom ? dateFrom.split('T')[0] : ''}
+                  onChange={e => setDateFrom(e.target.value ? `${e.target.value}T00:00:00.000Z` : '')}
+                  data-testid="filter-date-from"
+                />
               </div>
+              <div className="flex min-w-36 flex-1 flex-col">
+                <label className="text-[var(--font-micro)] font-semibold text-[var(--color-text-secondary)]">Hasta</label>
+                <input
+                  type="date"
+                  className="mt-1 w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-2 py-1.5 text-[var(--font-small)] text-[var(--color-text)] outline-none"
+                  value={dateTo ? dateTo.split('T')[0] : ''}
+                  onChange={e => setDateTo(e.target.value ? `${e.target.value}T23:59:59.999Z` : '')}
+                  data-testid="filter-date-to"
+                />
+              </div>
+              <button
+                className="rounded-[var(--radius-md)] bg-[var(--color-primary)]/50 px-3 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                onClick={handleFilterClick}
+                data-testid="btn-filter-reports"
+              >
+                Aplicar
+              </button>
+            </div>
 
-              {/* Listado */}
-              {historyLoading && history.length === 0 ? (
-                <p className="py-4 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
-                  Cargando ventas…
-                </p>
-              ) : historyError ? (
-                <div className="py-4 text-center">
-                  <p className="mb-2 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">
-                    {historyError}
+            {/* Detalle en dos columnas: ventas y productos más vendidos */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Historial de ventas (RF-PR-005) */}
+              <GlassSurface className="p-4">
+                <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">
+                  Ventas del día
+                </h4>
+
+                {historyLoading && history.length === 0 ? (
+                  <p className="py-4 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+                    Cargando ventas…
                   </p>
-                  <button
-                    className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-                    onClick={handleFilterClick}
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              ) : history.length > 0 ? (
-                <>
+                ) : historyError ? (
+                  <div className="py-4 text-center">
+                    <p className="mb-2 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">
+                      {historyError}
+                    </p>
+                    <button
+                      className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                      onClick={handleFilterClick}
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : history.length > 0 ? (
+                  <>
+                    <div className="divide-y divide-[var(--color-border)]">
+                      {history.map(s => (
+                        <SaleHistoryRow
+                          key={s.id}
+                          sale={s}
+                          canViewDetail={canViewDetail}
+                          onViewDetail={setDetailSaleId}
+                        />
+                      ))}
+                    </div>
+                    {canLoadMore && (
+                      <div className="pt-3 text-center">
+                        <button
+                          className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/70 px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                          onClick={handleLoadMore}
+                          disabled={historyLoading}
+                          data-testid="btn-load-more-reports"
+                        >
+                          {historyLoading ? 'Cargando…' : 'Cargar más'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                    Sin ventas registradas para el rango seleccionado.
+                  </p>
+                )}
+              </GlassSurface>
+
+              {/* Ranking de productos más vendidos */}
+              <GlassSurface className="p-4" data-testid="top-products">
+                <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">
+                  Productos más vendidos
+                </h4>
+                {topLoading ? (
+                  <p className="py-4 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+                    Cargando ranking…
+                  </p>
+                ) : topError ? (
+                  <div className="py-2 text-center">
+                    <p className="mb-2 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">
+                      {topError}
+                    </p>
+                    <button
+                      className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                      onClick={() => void loadTopProducts()}
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : topProducts.length > 0 ? (
                   <div className="divide-y divide-[var(--color-border)]">
-                    {history.map(s => (
-                      <SaleHistoryRow
-                        key={s.id}
-                        sale={s}
-                        canViewDetail={canViewDetail}
-                        onViewDetail={setDetailSaleId}
-                      />
+                    {topProducts.map((p, i) => (
+                      <div key={p.product_id} className="flex items-center justify-between gap-3 py-2">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-soft)] text-[var(--font-micro)] font-bold text-[var(--color-primary)]">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                              {p.product_name}
+                            </p>
+                            <p className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
+                              {fmtQty(p.units)} unidades · {p.tickets} tickets
+                            </p>
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-[var(--font-regular)] font-bold text-[var(--color-text)]">
+                          ${fmt(p.revenue)}
+                        </span>
+                      </div>
                     ))}
                   </div>
-                  {canLoadMore && (
-                    <div className="pt-3 text-center">
-                      <button
-                        className="rounded-[var(--radius-md)] bg-[var(--color-secondary)]/70 px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
-                        onClick={handleLoadMore}
-                        disabled={historyLoading}
-                        data-testid="btn-load-more-reports"
-                      >
-                        {historyLoading ? 'Cargando…' : 'Cargar más'}
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                  Sin ventas registradas para el rango seleccionado.
-                </p>
-              )}
-            </GlassSurface>
+                ) : (
+                  <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                    Sin ventas en el rango seleccionado.
+                  </p>
+                )}
+              </GlassSurface>
+            </div>
           </>
         )}
       </div>

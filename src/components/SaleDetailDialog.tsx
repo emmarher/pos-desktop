@@ -8,9 +8,13 @@
  * renderizar el botón que abre este modal (evita un 403 innecesario).
  */
 import {useEffect, useState} from 'react';
+import {Share2} from 'lucide-react';
 import {getSale} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import type {SaleDetail} from '../models';
+import {useAuthStore} from '../stores/auth.store';
+import ShareTicketDialog from './ShareTicketDialog';
+import type {TicketPreviewData} from './TicketPreview';
 
 /** Etiquetas legibles de los métodos de pago. */
 export const METHOD_LABELS: Record<string, string> = {
@@ -55,6 +59,9 @@ export default function SaleDetailDialog({
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<SaleDetail | null>(null);
+  const [shareData, setShareData] = useState<TicketPreviewData | null>(null);
+  const tenant = useAuthStore(s => s.tenant);
+  const license = useAuthStore(s => s.license);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,7 +88,30 @@ export default function SaleDetailDialog({
 
   if (!saleId) return null;
 
+  /** Arma el ticket visual desde el detalle (incluye licencia y contacto). */
+  const buildShareData = (d: SaleDetail): TicketPreviewData => ({
+    businessName: license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
+    businessAddress: tenant?.address ?? null,
+    businessPhone: tenant?.phone ?? null,
+    logoUrl: tenant?.logo_url ?? null,
+    folio: d.folio,
+    createdAt: d.created_at,
+    items: d.items.map(it => ({
+      name: it.product_name,
+      qty: it.alternate_quantity != null ? `${it.alternate_quantity} kg` : `${it.quantity}`,
+      unitPrice: it.unit_price,
+      subtotal: it.subtotal,
+    })),
+    subtotal: d.subtotal,
+    discount: d.discount,
+    total: d.total,
+    payments: d.payments.map(p => ({method: p.method, amount: p.amount})),
+    change: d.payments.reduce((sum, p) => sum + p.change_amount, 0),
+    footer: tenant?.receipt_footer ?? null,
+  });
+
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={onClose}
@@ -173,14 +203,26 @@ export default function SaleDetailDialog({
           ) : null}
         </div>
 
-        <button
-          className="mt-4 rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-soft)]"
-          onClick={onClose}
-          data-testid="btn-close-detail"
-        >
-          Cerrar
-        </button>
+        <div className="mt-4 flex gap-2">
+          <button
+            className="flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-primary)]/50 px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-on-primary)] hover:opacity-90 disabled:opacity-50"
+            onClick={() => detail && setShareData(buildShareData(detail))}
+            disabled={!detail}
+            data-testid="btn-share-ticket"
+          >
+            <Share2 size={16} /> Compartir
+          </button>
+          <button
+            className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-soft)]"
+            onClick={onClose}
+            data-testid="btn-close-detail"
+          >
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
+    <ShareTicketDialog data={shareData} onClose={() => setShareData(null)} />
+    </>
   );
 }
