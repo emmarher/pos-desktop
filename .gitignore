@@ -49,3 +49,5 @@ reports/
 
 # Archivos temporales del SO
 .DS_Store
+# Configuracion de agentes (no versionar)
+.commandcode/
