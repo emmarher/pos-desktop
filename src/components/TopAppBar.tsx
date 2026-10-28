@@ -112,6 +112,8 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
           status: status.status,
           expires_at: status.expires_at,
           max_devices: status.max_devices,
+          // Mantener el nombre del comercio de la licencia (D1).
+          customer: status.customer ?? null,
         },
         licenseState: status.status,
         error: null,
@@ -152,7 +154,7 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
             src={logoUrl}
             alt={storeName}
             onError={() => setLogoBroken(true)}
-            className="h-9 w-9 shrink-0 rounded-[var(--radius-md)] object-contain"
+            className="h-10 shrink-0 rounded-[var(--radius-md)] object-contain"
             data-testid="appbar-logo"
           />
         )}

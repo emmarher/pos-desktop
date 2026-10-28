@@ -22,6 +22,8 @@ import {
 import type {TenantSettingsData} from '../api/endpoints';
 import {useResolvedImageUrl} from '../lib/images';
 import {useAuthStore} from '../stores/auth.store';
+import AsyncStorage from '../lib/storage';
+import {STORAGE_TENANT} from '../constants/app';
 import {toast} from '../hooks/useToast';
 
 interface SettingsScreenProps {
@@ -68,6 +70,7 @@ export default function SettingsScreen({
   visibleTabs,
 }: SettingsScreenProps) {
   const license = useAuthStore(s => s.license);
+  const tenant = useAuthStore(s => s.tenant);
   const [settings, setSettings] = useState<TenantSettingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,14 @@ export default function SettingsScreen({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const remoteLogo = useResolvedImageUrl(settings?.logo_url);
   const logoSrc = logoPreview ?? remoteLogo;
+
+  /** Refleja cambios del comercio en el store para navbar y ticket. */
+  const patchTenant = async (patch: Record<string, unknown>) => {
+    if (!tenant) return;
+    const next = {...tenant, ...patch};
+    useAuthStore.setState({tenant: next});
+    await AsyncStorage.setItem(STORAGE_TENANT, JSON.stringify(next));
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -139,8 +150,11 @@ export default function SettingsScreen({
       const res = await uploadMerchantLogo({name: file.name, mime: file.type, bytes});
       // La URL remota ya incluye cache-busting por uuid; se refleja en la UI.
       setSettings(prev => (prev ? {...prev, logo_url: res.logo_url} : prev));
+      await patchTenant({logo_url: res.logo_url});
       toast.success('Logo actualizado.');
     } catch (err) {
+      // No dejar un preview que no se guardó.
+      setLogoPreview(null);
       toast.error(err instanceof ApiError ? err.message : 'No se pudo subir el logo.');
     } finally {
       setUploading(false);
@@ -153,6 +167,7 @@ export default function SettingsScreen({
       await deleteMerchantLogo();
       setSettings(prev => (prev ? {...prev, logo_url: null} : prev));
       setLogoPreview(null);
+      await patchTenant({logo_url: null});
       toast.success('Logo eliminado.');
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'No se pudo eliminar el logo.');
@@ -173,6 +188,11 @@ export default function SettingsScreen({
         receipt_footer: footer.trim() || null,
       });
       setSettings(data);
+      await patchTenant({
+        address: data.address,
+        phone: data.phone,
+        receipt_footer: data.receipt_footer,
+      });
       toast.success('Configuración guardada.');
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : 'No se pudo guardar.');
