@@ -8,8 +8,13 @@
 import {create} from 'zustand';
 
 import AsyncStorage from '../lib/storage';
-import {AuthResponse} from '../models';
-import {STORAGE_LICENSE_EXPIRY, LICENSE_GRACE_DAYS} from '../constants/app';
+import {AuthResponse, TenantSettings} from '../models';
+import {
+  STORAGE_LICENSE_EXPIRY,
+  STORAGE_TENANT,
+  STORAGE_LICENSE,
+  LICENSE_GRACE_DAYS,
+} from '../constants/app';
 
 const KEYCHAIN_AUTH = 'pos.auth.tokens';
 
@@ -44,6 +49,17 @@ async function storeTokens(tokens: PersistedTokens) {
 async function readTokens(): Promise<PersistedTokens | null> {
   const raw = await AsyncStorage.getItem(KEYCHAIN_AUTH);
   return raw ? (JSON.parse(raw) as PersistedTokens) : null;
+}
+
+/** Lee y parsea JSON del storage; null si no existe o está corrupto. */
+async function readJson<T>(key: string): Promise<T | null> {
+  const raw = await AsyncStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
 }
 
 export async function getStoredTokens(): Promise<PersistedTokens | null> {
@@ -102,6 +118,9 @@ export const useAuthStore = create<AuthState>(set => ({
       STORAGE_LICENSE_EXPIRY,
       auth.license.expires_at,
     );
+    // Cachear branding: navbar necesita logo/nombre al reiniciar (incluso offline).
+    await AsyncStorage.setItem(STORAGE_TENANT, JSON.stringify(auth.tenant));
+    await AsyncStorage.setItem(STORAGE_LICENSE, JSON.stringify(auth.license));
     set({
       tenantId: auth.user.tenant_id,
       userId: auth.user.id,
@@ -121,17 +140,13 @@ export const useAuthStore = create<AuthState>(set => ({
       return false;
     }
 
-    /* Validar la sesión contra el servidor ANTES de autenticar en local:
-       si la BD se reinició o el tenant ya no existe, el refresh falla y
-       se limpian las credenciales muertas (nada de sesiones fantasma).
-       Si el servidor NO es alcanzable (offline), se conserva el modo de
-       gracia con el caché — comportamiento previo. */
+    /* Validar la sesión contra el servidor ANTES de autenticar en local.
+       /auth/refresh devuelve el mismo contrato que login (tenant + license),
+       así el navbar recupera logo y nombre de la licencia al reiniciar. */
+    let refreshed: AuthResponse | null = null;
     try {
       const {apiRequest} = await import('../api/client');
-      const refreshed = await apiRequest<{
-        access_token: string;
-        refresh_token: string;
-      }>('/auth/refresh', {
+      refreshed = await apiRequest<AuthResponse>('/auth/refresh', {
         method: 'POST',
         body: {refresh_token: tokens.refresh_token},
         auth: false,
@@ -140,6 +155,9 @@ export const useAuthStore = create<AuthState>(set => ({
         access_token: refreshed.access_token,
         refresh_token: refreshed.refresh_token,
       });
+      // Refrescar el caché de branding para arranques sin red.
+      await AsyncStorage.setItem(STORAGE_TENANT, JSON.stringify(refreshed.tenant));
+      await AsyncStorage.setItem(STORAGE_LICENSE, JSON.stringify(refreshed.license));
     } catch (err) {
       const {isNetworkError} = await import('../api/client');
       if (!isNetworkError(err)) {
@@ -161,15 +179,23 @@ export const useAuthStore = create<AuthState>(set => ({
         licenseState = 'grace';
       }
     }
-    const user = decodeUserFromToken(tokens.access_token);
-    const license = cachedExpiry
-      ? ({
-          status: licenseState,
-          expires_at: cachedExpiry,
-          max_devices: 0,
-        } as AuthResponse['license'])
-      : null;
-    set({isAuthenticated: true, licenseState, user, license});
+
+    // Preferir la respuesta del servidor; si no hay red, usar el caché.
+    const user = refreshed?.user ?? decodeUserFromToken(tokens.access_token);
+    const tenant = refreshed?.tenant ?? (await readJson<TenantSettings>(STORAGE_TENANT));
+    const cachedLicense = await readJson<AuthResponse['license']>(STORAGE_LICENSE);
+    const license =
+      refreshed?.license ??
+      cachedLicense ??
+      (cachedExpiry
+        ? ({
+            status: licenseState,
+            expires_at: cachedExpiry,
+            max_devices: 0,
+          } as AuthResponse['license'])
+        : null);
+
+    set({isAuthenticated: true, licenseState, user, tenant, license});
     return true;
   },
 
@@ -193,6 +219,8 @@ export const useAuthStore = create<AuthState>(set => ({
   logout: async () => {
     await AsyncStorage.removeItem(KEYCHAIN_AUTH);
     await AsyncStorage.removeItem(STORAGE_LICENSE_EXPIRY);
+    await AsyncStorage.removeItem(STORAGE_TENANT);
+    await AsyncStorage.removeItem(STORAGE_LICENSE);
     set({
       tenantId: null,
       userId: null,

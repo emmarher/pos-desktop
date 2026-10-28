@@ -24,6 +24,7 @@ export interface TenantSettings {
   address?: string | null;
   phone?: string | null;
   receipt_footer?: string | null;
+  logo_url?: string | null;
   dark_mode?: boolean;
 }
 
@@ -66,6 +67,8 @@ export interface AuthResponse {
     status: 'active' | 'expired' | 'grace';
     expires_at: string;
     max_devices: number;
+    /** Nombre del comercio firmado en la licencia (D1). */
+    customer?: string | null;
   };
 }
 

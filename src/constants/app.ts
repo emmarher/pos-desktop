@@ -32,5 +32,7 @@ export const QOS_EXPIRY_MS = 5 * 60 * 1000;
 export const STORAGE_SERVER_IP = 'pos.server_ip';
 export const STORAGE_SERVER_PORT = 'pos.server_port';
 export const STORAGE_LICENSE_EXPIRY = 'pos.license_expiry';
+export const STORAGE_TENANT = 'pos.tenant';
+export const STORAGE_LICENSE = 'pos.license';
 
 export const QR_SCHEME = 'pos://connect';

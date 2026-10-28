@@ -8,8 +8,8 @@
  * y permite filtrar por rango de fechas (from/to).
  */
 import {useCallback, useEffect, useState} from 'react';
-import {getQuickStats, getSalesHistory} from '../api/endpoints';
-import type {QuickStats, SaleHistoryItem} from '../api/endpoints';
+import {getQuickStats, getSalesHistory, getTopProducts} from '../api/endpoints';
+import type {QuickStats, SaleHistoryItem, TopProduct} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {useAuthStore} from '../stores/auth.store';
 import SaleDetailDialog, {METHOD_LABELS} from '../components/SaleDetailDialog';
@@ -21,6 +21,10 @@ import GlassSurface from '../components/GlassSurface';
 
 const fmt = (n: number) =>
   n.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+/** Cantidades: hasta 3 decimales para ventas por peso (kg). */
+const fmtQty = (n: number) =>
+  n.toLocaleString('es-MX', {maximumFractionDigits: 3});
 
 interface ReportsScreenProps {
   activeTab: NavTab;
@@ -45,6 +49,10 @@ export default function ReportsScreen({
   const [dateTo, setDateTo] = useState('');
   const [historyOffset, setHistoryOffset] = useState(0);
   const [detailSaleId, setDetailSaleId] = useState<string | null>(null);
+  // Ranking de productos más vendidos (mismo rango de fechas que el historial)
+  const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
+  const [topLoading, setTopLoading] = useState(true);
+  const [topError, setTopError] = useState<string | null>(null);
 
   /* GET /sales/:id exige `sales:read_own`: si el usuario no lo tiene, la
    * pestaña Reportes sigue funcionando pero sin el botón de detalle. */
@@ -99,6 +107,27 @@ export default function ReportsScreen({
     [dateFrom, dateTo, historyOffset],
   );
 
+  /* Ranking de productos más vendidos */
+  const loadTopProducts = useCallback(async () => {
+    setTopLoading(true);
+    setTopError(null);
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const res = await getTopProducts({
+        from: dateFrom || `${today}T00:00:00.000Z`,
+        to: dateTo || undefined,
+        limit: 10,
+      });
+      setTopProducts(res);
+    } catch (err) {
+      // Mostrar el error real (red/permiso) en lugar de una lista vacía.
+      setTopError(err instanceof ApiError ? err.message : String(err));
+      setTopProducts([]);
+    } finally {
+      setTopLoading(false);
+    }
+  }, [dateFrom, dateTo]);
+
   useEffect(() => {
     void loadQuickStats();
   }, [loadQuickStats]);
@@ -109,10 +138,17 @@ export default function ReportsScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); /* solo al montar */
 
-  /* Recargar historial cuando cambian los filtros de fecha */
+  /* Recargar historial y ranking con el rango de fechas elegido */
   const handleFilterClick = () => {
     void loadHistory({reset: true});
+    void loadTopProducts();
   };
+
+  // Carga inicial del ranking al montar la pantalla.
+  useEffect(() => {
+    void loadTopProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); /* solo al montar */
 
   /* Cargar más (paginación) */
   const handleLoadMore = () => {
@@ -183,6 +219,57 @@ export default function ReportsScreen({
                 ))
               ) : (
                 <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">Sin datos por categoría</p>
+              )}
+            </GlassSurface>
+
+            {/* Ranking de productos más vendidos */}
+            <GlassSurface className="p-4" data-testid="top-products">
+              <h4 className="mb-2 text-[var(--font-medium)] font-bold text-[var(--color-text)]">
+                Productos más vendidos
+              </h4>
+              {topLoading ? (
+                <p className="py-4 text-center text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+                  Cargando ranking…
+                </p>
+              ) : topError ? (
+                <div className="py-2 text-center">
+                  <p className="mb-2 text-[var(--font-regular)] font-semibold text-[var(--color-danger)]">
+                    {topError}
+                  </p>
+                  <button
+                    className="rounded-[var(--radius-md)] bg-[var(--color-primary)] px-4 py-1.5 text-[var(--font-small)] font-semibold text-[var(--color-on-primary)] hover:opacity-90"
+                    onClick={() => void loadTopProducts()}
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              ) : topProducts.length > 0 ? (
+                <div className="divide-y divide-[var(--color-border)]">
+                  {topProducts.map((p, i) => (
+                    <div key={p.product_id} className="flex items-center justify-between gap-3 py-2">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-soft)] text-[var(--font-micro)] font-bold text-[var(--color-primary)]">
+                          {i + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[var(--font-regular)] font-semibold text-[var(--color-text)]">
+                            {p.product_name}
+                          </p>
+                          <p className="text-[var(--font-micro)] text-[var(--color-text-secondary)]">
+                            {fmtQty(p.units)} unidades · {p.tickets} tickets
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-[var(--font-regular)] font-bold text-[var(--color-text)]">
+                        ${fmt(p.revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[var(--font-small)] text-[var(--color-text-secondary)]">
+                  Sin ventas en el rango seleccionado.
+                </p>
               )}
             </GlassSurface>
 

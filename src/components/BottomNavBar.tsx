@@ -5,9 +5,9 @@
  * Inventario, Reportes. Reportes se oculta si no hay reports:read
  * (visibleTabs).
  */
-import {Store, Box, BarChart3, Receipt} from 'lucide-react';
+import {Store, Box, BarChart3, Receipt, Settings} from 'lucide-react';
 
-export type NavTab = 'caja' | 'inventario' | 'reportes' | 'tickets';
+export type NavTab = 'caja' | 'inventario' | 'reportes' | 'tickets' | 'ajustes';
 
 interface BottomNavBarProps {
   active: NavTab;
@@ -22,6 +22,7 @@ const TABS: {key: NavTab; label: string; icon: React.ComponentType<{size?: numbe
   {key: 'inventario', label: 'Inventario', icon: Box},
   {key: 'reportes', label: 'Reportes', icon: BarChart3},
   {key: 'tickets', label: 'Tickets', icon: Receipt},
+  {key: 'ajustes', label: 'Ajustes', icon: Settings},
 ];
 
 export default function BottomNavBar({

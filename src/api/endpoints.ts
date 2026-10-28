@@ -123,6 +123,68 @@ export function getLicenseStatus(): Promise<LicenseStatus> {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
+ * CONFIGURACIÓN DEL COMERCIO (pestaña Ajustes)
+ *   El nombre visible viene de la licencia (display_name); aquí solo se
+ *   editan datos de contacto, pie de ticket y el logo.
+ * ────────────────────────────────────────────────────────────────────── */
+export interface TenantSettingsData {
+  business_name: string | null;
+  display_name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  rfc: string | null;
+  tax_rate: number;
+  currency: string;
+  ticket_header: string;
+  receipt_footer: string | null;
+  logo_url: string | null;
+  timezone: string;
+}
+
+export interface TenantSettingsPatch {
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  rfc?: string | null;
+  tax_rate?: number;
+  currency?: string;
+  ticket_header?: string | null;
+  receipt_footer?: string | null;
+}
+
+/** GET /settings/tenant — configuración + nombre resuelto (settings:manage). */
+export function getTenantSettings(): Promise<TenantSettingsData> {
+  return apiRequest<TenantSettingsData>('/settings/tenant');
+}
+
+/** PATCH /settings/tenant — datos editables del negocio. */
+export function updateTenantSettings(
+  patch: TenantSettingsPatch,
+): Promise<TenantSettingsData> {
+  return apiRequest<TenantSettingsData>('/settings/tenant', {
+    method: 'PATCH',
+    body: patch,
+  });
+}
+
+/** POST /settings/logo — sube/reemplaza el logo (multipart). */
+export function uploadMerchantLogo(file: {
+  name: string;
+  mime: string;
+  bytes: ArrayBuffer;
+}): Promise<{logo_url: string | null}> {
+  return apiUploadFile<{logo_url: string | null}>('/settings/logo', file);
+}
+
+/** DELETE /settings/logo — quita el logo del comercio. */
+export function deleteMerchantLogo(): Promise<{logo_url: string | null}> {
+  return apiRequest<{logo_url: string | null}>('/settings/logo', {
+    method: 'DELETE',
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────────
  * CATÁLOGO Y BÚSQUEDA DE PRODUCTOS
  *   Búsqueda por nombre / internal_code / barcode (RF-CA-006).
  *   El debounce de 300ms y el límite de 20 resultados los aplica la UI
@@ -286,6 +348,35 @@ export interface QuickStats {
 
 export function getQuickStats(): Promise<QuickStats> {
   return apiRequest<QuickStats>('/reports/quick-stats');
+}
+
+/** Producto del ranking de más vendidos (GET /reports/top-products). */
+export interface TopProduct {
+  product_id: string;
+  product_name: string;
+  /** Unidades vendidas en unidad base (kg, piezas, etc.) */
+  units: number;
+  /** Ventas distintas que incluyeron el producto */
+  tickets: number;
+  /** Ingreso por subtotal de los ítems */
+  revenue: number;
+}
+
+export interface TopProductsParams {
+  from?: string;
+  to?: string;
+  limit?: number;
+}
+
+/** GET /reports/top-products — ranking por ingreso (reports:read). */
+export function getTopProducts(
+  params?: TopProductsParams,
+): Promise<TopProduct[]> {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set('from', params.from);
+  if (params?.to) qs.set('to', params.to);
+  qs.set('limit', String(params?.limit ?? 10));
+  return apiRequest<TopProduct[]>(`/reports/top-products?${qs.toString()}`);
 }
 
 /** Venta del historial (GET /reports/sales-history, GET /sales). */

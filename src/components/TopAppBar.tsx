@@ -12,6 +12,7 @@ import {getLicenseStatus, uploadLicense} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import AsyncStorage from '../lib/storage';
 import {STORAGE_LICENSE_EXPIRY} from '../constants/app';
+import {useResolvedImageUrl} from '../lib/images';
 
 interface TopAppBarProps {
   title: string;
@@ -41,6 +42,13 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
   const [renewBusy, setRenewBusy] = useState(false);
   const [renewMsg, setRenewMsg] = useState<string | null>(null);
   const [renewOk, setRenewOk] = useState(false);
+  // Logo del comercio: URL reactiva al servidor; si falla se oculta.
+  const logoUrl = useResolvedImageUrl(tenant?.logo_url);
+  const [logoBroken, setLogoBroken] = useState(false);
+  useEffect(() => setLogoBroken(false), [logoUrl]);
+  // Nombre visible: licencia (D1) → business_name (D10).
+  const storeName =
+    license?.customer?.trim() || tenant?.business_name || 'Punto de venta';
 
   // Inicial del usuario para el avatar (fallback 'U')
   const initial = (user?.name?.trim()?.charAt(0) ?? 'U').toUpperCase();
@@ -126,7 +134,7 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
 
   return (
     <header className="relative z-40 flex h-16 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 backdrop-blur-[var(--glass-blur)]">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         {/* Botón de retroceso: solo en pantallas secundarias que pasan onBack. */}
         {onBack && (
           <button
@@ -138,9 +146,25 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
             <ArrowLeft size={20} />
           </button>
         )}
-        <h1 className="truncate text-[var(--font-medium)] font-bold text-[var(--color-text)]">
-          {title}
-        </h1>
+        {/* Logo del comercio (oculto si no hay imagen o falla la carga) */}
+        {logoUrl && !logoBroken && (
+          <img
+            src={logoUrl}
+            alt={storeName}
+            onError={() => setLogoBroken(true)}
+            className="h-9 w-9 shrink-0 rounded-[var(--radius-md)] object-contain"
+            data-testid="appbar-logo"
+          />
+        )}
+        <div className="flex min-w-0 flex-col leading-tight">
+          {/* Nombre de la tienda: viene de la licencia, junto al logo */}
+          <span className="truncate text-[var(--font-micro)] font-semibold uppercase tracking-wide text-[var(--color-text-secondary)]">
+            {storeName}
+          </span>
+          <h1 className="truncate text-[var(--font-medium)] font-bold text-[var(--color-text)]">
+            {title}
+          </h1>
+        </div>
       </div>
 
       {/* Avatar + menú */}
@@ -168,7 +192,7 @@ export default function TopAppBar({title, onLogout, onBack}: TopAppBarProps) {
               </p>
               {tenant && (
                 <p className="mt-1 text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                  {tenant.business_name}
+                  {storeName}
                 </p>
               )}
             </div>

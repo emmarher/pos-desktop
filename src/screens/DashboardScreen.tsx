@@ -12,6 +12,7 @@ import PosTerminalScreen from './PosTerminalScreen';
 import InventoryScreen from './InventoryScreen';
 import ReportsScreen from './ReportsScreen';
 import TicketsScreen from './TicketsScreen';
+import SettingsScreen from './SettingsScreen';
 import {useAuthStore} from '../stores/auth.store';
 
 export default function DashboardScreen() {
@@ -23,10 +24,12 @@ export default function DashboardScreen() {
   const canViewReports = user?.permissions.includes('reports:read') ?? false;
   const canViewInventory = user?.permissions.includes('inventory:read') ?? false;
   const canViewTickets = user?.permissions.includes('sales:read_own') ?? false;
+  const canManageSettings = user?.permissions.includes('settings:manage') ?? false;
   const visibleTabs: NavTab[] = ['caja'];
   if (canViewInventory) visibleTabs.push('inventario');
   if (canViewReports) visibleTabs.push('reportes');
   if (canViewTickets) visibleTabs.push('tickets');
+  if (canManageSettings) visibleTabs.push('ajustes');
 
   const effectiveTab: NavTab = visibleTabs.includes(tab) ? tab : 'caja';
 
@@ -71,6 +74,17 @@ export default function DashboardScreen() {
         />
         {hardwareButton}
       </>
+    );
+  }
+
+  if (effectiveTab === 'ajustes') {
+    return (
+      <SettingsScreen
+        activeTab={effectiveTab}
+        onTabChange={setTab}
+        onLogout={handleLogout}
+        visibleTabs={visibleTabs}
+      />
     );
   }
 
