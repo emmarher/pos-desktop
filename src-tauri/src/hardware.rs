@@ -11,6 +11,7 @@
 //! se agregan a pos-server en la Fase 5.
 
 use chrono::Utc;
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -66,7 +67,7 @@ pub struct ScaleReadingEvent {
 }
 
 /// Job de impresión pendiente, espejo del modelo PrintJob.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct PrintJob {
     id: String,
     content: Option<String>,
@@ -103,27 +104,70 @@ pub fn start_hardware(
     // Clonar la config para moverla al task async.
     let cfg = config.clone();
 
+    // Impresión: task propia con SSE en tiempo real (no bloquea la báscula).
+    if cfg.can_print {
+        let print_cfg = cfg.clone();
+        let print_client = client.clone();
+        let print_base = base_url.clone();
+        let print_app = app_handle.clone();
+        let print_running = running_flag.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut printer_serial: Option<Box<dyn serialport::SerialPort>> = None;
+            if print_cfg.printer_name.is_none() {
+                if let Some(sc) = &print_cfg.printer_serial {
+                    match open_serial(&sc.port, sc.baud_rate) {
+                        Ok(p) => printer_serial = Some(p),
+                        Err(e) => emit_error(&print_app, "printer", &e),
+                    }
+                } else {
+                    emit_error(
+                        &print_app,
+                        "printer",
+                        "can_print=true pero sin printer_serial ni printer_name; configura la impresora en Hardware",
+                    );
+                    return;
+                }
+            }
+
+            let mut backoff_secs = 1u64;
+            while print_running.load(Ordering::SeqCst) {
+                // SSE primero: sin polling mientras la conexión vive.
+                let stream_result = if let Some(name) = print_cfg.printer_name.clone() {
+                    consume_print_stream_usb(&print_client, &print_base, &print_cfg, &name, &print_app).await
+                } else if let Some(port) = printer_serial.as_mut() {
+                    consume_print_stream_serial(&print_client, &print_base, &print_cfg, port, &print_app).await
+                } else {
+                    break;
+                };
+                if let Err(e) = stream_result {
+                    emit_error(&print_app, "printer", &e);
+                }
+                if !print_running.load(Ordering::SeqCst) {
+                    break;
+                }
+
+                // Respaldo: recupera jobs que llegaron durante la caída del SSE.
+                let fallback = if let Some(name) = print_cfg.printer_name.clone() {
+                    poll_print_jobs_usb(&print_client, &print_base, &print_cfg, &name, &print_app).await
+                } else if let Some(port) = printer_serial.as_mut() {
+                    poll_print_jobs_serial(&print_client, &print_base, &print_cfg, port, &print_app).await
+                } else {
+                    Ok(())
+                };
+                if let Err(e) = fallback {
+                    emit_error(&print_app, "printer", &e);
+                }
+
+                tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+                backoff_secs = (backoff_secs * 2).min(30);
+            }
+        });
+    }
+
+    // Báscula: conserva su ritmo de 500 ms.
     tauri::async_runtime::spawn(async move {
-        let mut printer_serial: Option<Box<dyn serialport::SerialPort>> = None;
         let mut scale_serial: Option<Box<dyn serialport::SerialPort>> = None;
         let mut scale_last_weight: Option<f64> = None;
-
-        // Branch USB vs Serial: si hay printer_name (80mm USB WinSpool) no abrir COM.
-        let uses_usb = cfg.printer_name.is_some();
-        if cfg.can_print && !uses_usb {
-            if let Some(sc) = &cfg.printer_serial {
-                match open_serial(&sc.port, sc.baud_rate) {
-                    Ok(p) => printer_serial = Some(p),
-                    Err(e) => emit_error(&app_handle, "printer", &e),
-                }
-            } else {
-                emit_error(
-                    &app_handle,
-                    "printer",
-                    "can_print=true pero sin printer_serial ni printer_name; configura la impresora en Hardware",
-                );
-            }
-        }
         if cfg.can_scale {
             if let Some(sc) = &cfg.scale_serial {
                 match open_serial(&sc.port, sc.baud_rate) {
@@ -137,26 +181,6 @@ pub fn start_hardware(
             if !running_flag.load(Ordering::SeqCst) {
                 break;
             }
-
-            if cfg.can_print {
-                // USB (WinSpool RAW) no requiere puerto serial — 80mm 203dpi
-                if let Some(printer_name) = cfg.printer_name.clone() {
-                    match poll_print_jobs_usb(&client, &base_url, &cfg, &printer_name, &app_handle)
-                        .await
-                    {
-                        Ok(()) => {}
-                        Err(e) => emit_error(&app_handle, "printer", &e),
-                    }
-                } else if let Some(port) = printer_serial.as_mut() {
-                    match poll_print_jobs_serial(&client, &base_url, &cfg, port, &app_handle)
-                        .await
-                    {
-                        Ok(()) => {}
-                        Err(e) => emit_error(&app_handle, "printer", &e),
-                    }
-                }
-            }
-
             if cfg.can_scale {
                 if let Some(port) = scale_serial.as_mut() {
                     if let Some(sc) = &cfg.scale_serial {
@@ -170,7 +194,6 @@ pub fn start_hardware(
                     }
                 }
             }
-
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
     });
@@ -229,6 +252,162 @@ async fn fetch_pending_jobs(
         .unwrap_or_default())
 }
 
+/// Pide el stream SSE del dispositivo (autenticado con Bearer).
+async fn open_print_stream(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+) -> Result<reqwest::Response, String> {
+    let url = format!(
+        "{base_url}/print-jobs/stream?target_device_id={}",
+        config.device_id
+    );
+    let mut req = client.get(&url).header("Accept", "text/event-stream");
+    if let Some(token) = &config.access_token {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| format!("SSE /print-jobs falló: {e}"))?;
+    if !resp.status().is_success() {
+        return Err(format!("SSE /print-jobs: HTTP {}", resp.status()));
+    }
+    Ok(resp)
+}
+
+/// Reclama el job (PENDING → PRINTING). false si otro dispositivo lo tomó.
+async fn claim_job(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    job_id: &str,
+    app: &AppHandle,
+) -> bool {
+    let url = format!("{base_url}/print-jobs/{job_id}");
+    let mut req = client
+        .patch(&url)
+        .json(&serde_json::json!({ "status": "PRINTING" }));
+    if let Some(token) = &config.access_token {
+        req = req.header("Authorization", format!("Bearer {token}"));
+    }
+    match req.send().await {
+        Ok(resp) if resp.status().is_success() => true,
+        Ok(resp) => {
+            // 409 = ya reclamado; no es un error que deba alertar.
+            if resp.status().as_u16() != 409 {
+                emit_error(app, "printer", &format!("claim HTTP {}", resp.status()));
+            }
+            false
+        }
+        Err(e) => {
+            emit_error(app, "printer", &format!("claim falló: {e}"));
+            false
+        }
+    }
+}
+
+/// Extrae frames SSE completos (`event:` + `data:`) y devuelve el resto.
+fn take_sse_frames(buffer: &str) -> (Vec<(String, String)>, String) {
+    let mut frames = Vec::new();
+    let mut rest = buffer.to_string();
+    while let Some(pos) = rest.find("\n\n") {
+        let frame = rest[..pos].to_string();
+        rest = rest[pos + 2..].to_string();
+        let mut event = "message".to_string();
+        let mut data = String::new();
+        for line in frame.lines() {
+            if let Some(value) = line.strip_prefix("event:") {
+                event = value.trim().to_string();
+            } else if let Some(value) = line.strip_prefix("data:") {
+                if !data.is_empty() {
+                    data.push('\n');
+                }
+                data.push_str(value.trim());
+            }
+        }
+        if !data.is_empty() {
+            frames.push((event, data));
+        }
+    }
+    (frames, rest)
+}
+
+/// Consume el SSE e imprime por WinSpool RAW (80mm USB).
+async fn consume_print_stream_usb(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    printer_name: &str,
+    app: &AppHandle,
+) -> Result<(), String> {
+    let resp = open_print_stream(client, base_url, config).await?;
+    let mut stream = resp.bytes_stream();
+    let mut buffer = String::new();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| format!("stream SSE: {e}"))?;
+        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        let (frames, rest) = take_sse_frames(&buffer);
+        buffer = rest;
+        for (event, data) in frames {
+            if event != "job" {
+                continue;
+            }
+            let job: PrintJob =
+                serde_json::from_str(&data).map_err(|e| format!("job SSE inválido: {e}"))?;
+            if !claim_job(client, base_url, config, &job.id, app).await {
+                continue;
+            }
+            let seq = build_print_sequence(&job.content.unwrap_or_default(), 48);
+            let result = crate::printer_usb::send_raw(printer_name, &seq);
+            let status = if result.is_ok() { "COMPLETED" } else { "FAILED" };
+            if let Err(e) = &result {
+                emit_error(app, "printer", e);
+            }
+            patch_job_status(client, base_url, config, &job.id, status, app).await;
+        }
+    }
+    Ok(())
+}
+
+/// Consume el SSE e imprime por serial (legacy COM).
+async fn consume_print_stream_serial(
+    client: &reqwest::Client,
+    base_url: &str,
+    config: &HardwareConfig,
+    port: &mut Box<dyn serialport::SerialPort>,
+    app: &AppHandle,
+) -> Result<(), String> {
+    use std::io::Write;
+    let resp = open_print_stream(client, base_url, config).await?;
+    let mut stream = resp.bytes_stream();
+    let mut buffer = String::new();
+    while let Some(chunk) = stream.next().await {
+        let bytes = chunk.map_err(|e| format!("stream SSE: {e}"))?;
+        buffer.push_str(&String::from_utf8_lossy(&bytes));
+        let (frames, rest) = take_sse_frames(&buffer);
+        buffer = rest;
+        for (event, data) in frames {
+            if event != "job" {
+                continue;
+            }
+            let job: PrintJob =
+                serde_json::from_str(&data).map_err(|e| format!("job SSE inválido: {e}"))?;
+            if !claim_job(client, base_url, config, &job.id, app).await {
+                continue;
+            }
+            let seq = build_print_sequence(&job.content.unwrap_or_default(), 48);
+            let write_result = port.write_all(&seq).and_then(|_| port.flush());
+            let status = if write_result.is_ok() { "COMPLETED" } else { "FAILED" };
+            if let Err(e) = &write_result {
+                emit_error(app, "printer", &format!("Serial write falló: {e}"));
+            }
+            patch_job_status(client, base_url, config, &job.id, status, app).await;
+        }
+    }
+    Ok(())
+}
+
 async fn patch_job_status(
     client: &reqwest::Client,
     base_url: &str,
@@ -258,6 +437,9 @@ async fn poll_print_jobs_usb(
 ) -> Result<(), String> {
     let jobs = fetch_pending_jobs(client, base_url, config).await?;
     for job in jobs {
+        if !claim_job(client, base_url, config, &job.id, app).await {
+            continue;
+        }
         let content = job.content.unwrap_or_default();
         // 80mm 203dpi → 48 chars (384 dots)
         let seq = build_print_sequence(&content, 48);
@@ -282,6 +464,9 @@ async fn poll_print_jobs_serial(
     use std::io::Write;
     let jobs = fetch_pending_jobs(client, base_url, config).await?;
     for job in jobs {
+        if !claim_job(client, base_url, config, &job.id, app).await {
+            continue;
+        }
         let content = job.content.unwrap_or_default();
         let seq = build_print_sequence(&content, 48);
         let write_result = port.write_all(&seq).and_then(|_| port.flush());
@@ -390,5 +575,16 @@ mod tests {
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains("deviceId"));
         assert!(json.contains("1.25"));
+    }
+
+    #[test]
+    fn sse_frames_parse_event_and_keep_incomplete_tail() {
+        let (frames, rest) = take_sse_frames(
+            "event: job\ndata: {\"id\":\"a\"}\n\nevent: job\ndata: {\"id\":",
+        );
+        assert_eq!(frames.len(), 1);
+        assert_eq!(frames[0].0, "job");
+        assert_eq!(frames[0].1, "{\"id\":\"a\"}");
+        assert!(rest.starts_with("event: job"));
     }
 }

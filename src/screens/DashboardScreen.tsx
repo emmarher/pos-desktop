@@ -4,7 +4,7 @@
  * Portado de pos-mobile. Pestañas: Productos (terminal), Inventario,
  * Reportes. Reportes solo con reports:read. Cerrar sesión desde el avatar.
  */
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {Settings} from 'lucide-react';
 import type {NavTab} from '../components/BottomNavBar';
@@ -13,13 +13,16 @@ import InventoryScreen from './InventoryScreen';
 import ReportsScreen from './ReportsScreen';
 import TicketsScreen from './TicketsScreen';
 import SettingsScreen from './SettingsScreen';
-import {useAuthStore} from '../stores/auth.store';
+import {useAuthStore, getStoredTokens} from '../stores/auth.store';
+import {getPersistedUsbPrinter, startHardware, stopHardware} from '../services/hardware';
+import {getServerOrigin} from '../lib/serverBase';
 
 export default function DashboardScreen() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<NavTab>('caja');
   const logout = useAuthStore(s => s.logout);
   const user = useAuthStore(s => s.user);
+  const deviceId = useAuthStore(s => s.deviceId);
 
   const canViewReports = user?.permissions.includes('reports:read') ?? false;
   const canViewInventory = user?.permissions.includes('inventory:read') ?? false;
@@ -30,6 +33,39 @@ export default function DashboardScreen() {
   if (canViewReports) visibleTabs.push('reportes');
   if (canViewTickets) visibleTabs.push('tickets');
   if (canManageSettings) visibleTabs.push('ajustes');
+
+  /* Arranca el consumidor SSE de impresión si este equipo tiene impresora.
+     Sin esto la cola delegada queda sin consumidor. */
+  useEffect(() => {
+    if (!deviceId) return;
+    let cancelled = false;
+    void (async () => {
+      const [printer, tokens] = await Promise.all([
+        getPersistedUsbPrinter(),
+        getStoredTokens(),
+      ]);
+      const origin = getServerOrigin();
+      if (cancelled || !origin || !tokens?.access_token || !printer?.printerName) return;
+      const url = new URL(origin);
+      try {
+        await startHardware({
+          server_ip: url.hostname,
+          server_port: Number(url.port) || 3000,
+          device_id: deviceId,
+          can_print: true,
+          can_scale: false,
+          printer_name: printer.printerName,
+          access_token: tokens.access_token,
+        });
+      } catch {
+        // Ya estaba corriendo o no hay hardware: la venta directa sigue igual.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      void stopHardware().catch(() => {});
+    };
+  }, [deviceId]);
 
   const effectiveTab: NavTab = visibleTabs.includes(tab) ? tab : 'caja';
 
