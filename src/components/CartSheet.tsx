@@ -53,7 +53,7 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [submitting, setSubmitting] = useState(false);
-  // Ticket para compartir cuando no se pudo imprimir.
+  // Ticket para DEscargar cuando no se pudo imprimir.
   const [shareData, setShareData] = useState<TicketPreviewData | null>(null);
 
   useEffect(() => {

@@ -97,8 +97,10 @@ pub async fn api_request(
                 _ => reqwest::Method::GET,
             },
             &url,
-        )
-        .header("Content-Type", "application/json");
+        );
+    // Sin cuerpo no se manda Content-Type: Fastify rechaza un JSON vacío
+    // (FST_ERR_CTP_EMPTY_JSON_BODY) y los DELETE no llevan payload.
+    // req.json(&body) ya pone el header cuando sí hay body.
 
     // Token de sesión desde Rust (si auth=true).
     if input.auth {

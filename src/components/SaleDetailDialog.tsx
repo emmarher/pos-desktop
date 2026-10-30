@@ -8,7 +8,7 @@
  * renderizar el botón que abre este modal (evita un 403 innecesario).
  */
 import {useEffect, useState} from 'react';
-import {Share2} from 'lucide-react';
+import {Share2, Download} from 'lucide-react';
 import {getSale} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import type {SaleDetail} from '../models';
@@ -210,7 +210,7 @@ export default function SaleDetailDialog({
             disabled={!detail}
             data-testid="btn-share-ticket"
           >
-            <Share2 size={16} /> Compartir
+            <Download size={16} /> Descargar
           </button>
           <button
             className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-[var(--font-regular)] font-semibold text-[var(--color-text-secondary)] hover:bg-[var(--color-primary-soft)]"

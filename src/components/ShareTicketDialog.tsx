@@ -50,7 +50,7 @@ export default function ShareTicketDialog({data, onClose}: ShareTicketDialogProp
       >
         <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
           <h3 className="text-[var(--font-medium)] font-extrabold text-[var(--color-text)]">
-            Compartir ticket
+            Descargar ticket
           </h3>
           <button onClick={onClose} aria-label="Cerrar" className="text-[var(--color-text-secondary)]">
             <X size={18} />
