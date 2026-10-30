@@ -246,7 +246,7 @@ export default function InventoryScreen({
                     {p.name}
                   </span>
                   <span className="block text-[var(--font-small)] text-[var(--color-text-secondary)]">
-                    {p.sku ?? p.internal_code} · Stock: {p.stock}
+                    {p.barcode ?? p.sku ?? p.internal_code} · Stock: {p.stock}
                   </span>
                 </span>
                 <StatusChip status={stockStatus(p)} testID={`status-${p.id}`} />

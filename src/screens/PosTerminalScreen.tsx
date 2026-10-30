@@ -5,9 +5,9 @@
  * catálogo grid, sheet de cantidad (3 precios), carrito y POST /sales
  * (vía Rust).
  */
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import type {Category, PriceType, Product} from '../models';
-import {getCategories, getPriceTypes} from '../api/endpoints';
+import {getCategories, getPriceTypes, searchProducts} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import {useCartStore} from '../stores/cart.store';
 import {useAuthStore} from '../stores/auth.store';
@@ -21,7 +21,10 @@ import ProductSheet from '../components/ProductSheet';
 import CartSheet from '../components/CartSheet';
 import Fab from '../components/Fab';
 import type {CartItem} from '../models';
-import {getScaleDeviceId} from '../lib/scale';
+import {getScaleDeviceId, isMassProduct, isCajProduct} from '../lib/scale';
+import {findExactCode} from '../lib/scan';
+import {getProductPrices} from '../constants/prices';
+import {toast} from '../hooks/useToast';
 
 interface PosTerminalScreenProps {
   activeTab: NavTab;
@@ -50,6 +53,7 @@ export default function PosTerminalScreen({
     total,
     queryInput,
     setQueryInput,
+    searchNow,
     categoryId,
     setCategoryId,
     loading,
@@ -61,6 +65,9 @@ export default function PosTerminalScreen({
     reload,
     patchProduct,
   } = useProductCatalog();
+
+  /* Ref al input de búsqueda: tras escanear se le devuelve el foco para el siguiente código. */
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
@@ -100,6 +107,64 @@ export default function PosTerminalScreen({
   /* device_id de la báscula si esta máquina la tiene registrada (HardwareScreen). */
   const scaleDeviceId = getScaleDeviceId() ?? undefined;
 
+  /* addItem: el scan de un COUNT lo agrega directo (cantidad 1, precio por defecto). */
+  const cartAddItem = useCartStore(s => s.addItem);
+
+  /**
+   * handleScan — flujo del escáner HID (teclea el código y manda Enter).
+   * 1) Busca el match EXACTO (barcode o internal_code en MAYÚSCULAS) primero
+   *    en los productos ya cargados; si no aparece, pregunta al backend.
+   * 2) MASS/CAJ: no se puede agregar sin peso → se abre ProductSheet para capturarlo.
+   * 3) COUNT normal: agrega directo cantidad 1 con el precio por defecto.
+   * 4) Sin match: toast y se deja la búsqueda visible con el código tecleado.
+   */
+  const handleScan = useCallback(async (code: string) => {
+    const c = code.trim();
+    if (!c) return;
+    const loaded = findExactCode(products, c);
+    let match = loaded;
+    if (!match) {
+      try {
+        const res = await searchProducts({q: c, limit: 20});
+        match = findExactCode(res.items ?? [], c);
+      } catch {
+        match = null;
+      }
+    }
+    if (!match) {
+      toast.error('Código no encontrado');
+      searchNow(c); /* deja visible la búsqueda con el código tecleado */
+      return;
+    }
+    /* MASS/CAJ: requieren peso → abrir el sheet para capturarlo. */
+    if (isMassProduct(match) || isCajProduct(match)) {
+      setSelectedProduct(match);
+      searchNow(c);
+      return;
+    }
+    if (match.stock <= 0) {
+      toast.error(`«${match.name}» está agotado`);
+      searchNow(c);
+      return;
+    }
+    /* COUNT: agregar al carrito con la primera opción de precio (la default). */
+    const first = getProductPrices(match, priceTypes)[0];
+    const key = `${match.id}-${Date.now().toString(36)}`;
+    cartAddItem({
+      key,
+      product: match,
+      quantity: 1,
+      priceType: first.priceType,
+      unitPrice: first.price,
+      discount: 0,
+      subtotal: first.price,
+      baseQuantity: match.unit_conversion,
+      isCaj: false,
+    });
+    setQueryInput(''); /* limpia la búsqueda tras agregar */
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, [products, priceTypes, cartAddItem, setQueryInput, searchNow]);
+
   /* Categorías y tipos de precio: son listas cortas, no paginan.
      El catálogo de productos lo carga el hook useProductCatalog. */
   const loadCatalog = useCallback(async () => {
@@ -134,9 +199,12 @@ export default function PosTerminalScreen({
       {/* Búsqueda + categorías */}
       <div className="px-4 pt-3">
         <SearchInput
-          placeholder="Buscar productos…"
+          placeholder="Buscar productos… (o escanea el código)"
           value={queryInput}
           onChangeText={setQueryInput}
+          onSubmit={handleScan}
+          inputRef={searchInputRef}
+          autoFocus
           testID="search-products"
         />
         <div className="mt-2 flex flex-wrap gap-2">

@@ -51,6 +51,8 @@ export default function ProductFormSheet({
   const [priceTypes, setPriceTypes] = useState<PriceType[]>([]);
 
   const [name, setName] = useState('');
+  // Código de barras opcional (se captura con escáner HID); '' → null en el backend.
+  const [barcode, setBarcode] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [baseUnitId, setBaseUnitId] = useState<string | null>(null);
   const [saleUnitId, setSaleUnitId] = useState<string | null>(null);
@@ -99,6 +101,7 @@ export default function ProductFormSheet({
     void loadOptions();
     if (mode === 'edit' && initial) {
       setName(initial.name);
+      setBarcode(initial.barcode ?? ''); // prefill del código guardado (puede ser null/'').
       setCategoryId(initial.category_id ?? null);
       setBaseUnitId(initial.base_unit_id);
       setSaleUnitId(initial.sale_unit_id);
@@ -119,6 +122,7 @@ export default function ProductFormSheet({
       setImagePreview(null);
     } else {
       setName('');
+      setBarcode('');
       setCategoryId(null);
       setBaseUnitId(null);
       setSaleUnitId(null);
@@ -214,6 +218,8 @@ export default function ProductFormSheet({
 
     const payload = {
       name: name.trim(),
+      // barcode opcional: el backend normaliza '' a null (evita chocar con el índice único).
+      barcode: barcode.trim() || null,
       category_id: categoryId,
       base_unit_id: baseUnitId!, // validado arriba: no es null en este punto.
       sale_unit_id: saleUnitId!,
@@ -309,6 +315,19 @@ export default function ProductFormSheet({
             data-testid="pf-name"
           />
           {errors.name && <p className="mt-1 text-[var(--font-micro)] text-[var(--color-danger)]">{errors.name}</p>}
+
+          {/* Código de barras (opcional) — lo escribe el escáner HID; máx 100 como el esquema */}
+          <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">
+            Código de barras <span className="font-normal text-[var(--color-text-secondary)]">(opcional)</span>
+          </label>
+          <input
+            className="w-full rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-input)] px-3 py-2.5 text-[var(--font-regular)] text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
+            placeholder="Escanea o escribe el código…"
+            maxLength={100}
+            value={barcode}
+            onChange={e => setBarcode(e.target.value)}
+            data-testid="pf-barcode"
+          />
 
           {/* Imagen */}
           <label className="mb-1 mt-3 block text-[var(--font-small)] font-semibold text-[var(--color-text-secondary)]">

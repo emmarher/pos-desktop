@@ -8,7 +8,7 @@
  * renderizar el botón que abre este modal (evita un 403 innecesario).
  */
 import {useEffect, useState} from 'react';
-import {Share2, Download} from 'lucide-react';
+import {Download} from 'lucide-react';
 import {getSale} from '../api/endpoints';
 import {ApiError} from '../api/client';
 import type {SaleDetail} from '../models';

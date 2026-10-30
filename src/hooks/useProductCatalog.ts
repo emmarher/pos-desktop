@@ -45,6 +45,8 @@ export interface ProductCatalog {
   /** Texto de búsqueda inmediato (lo que ve el usuario mientras escribe). */
   queryInput: string;
   setQueryInput: (text: string) => void;
+  /** Busca al instante (sin esperar el debounce) — usado tras un escaneo. */
+  searchNow: (text: string) => void;
   /** Categoría activa; 'all' = todas. */
   categoryId: string;
   setCategoryId: (id: string) => void;
@@ -193,6 +195,14 @@ export function useProductCatalog(): ProductCatalog {
     setProducts(prev => prev.map(p => (p.id === id ? {...p, ...patch} : p)));
   }, []);
 
+  /* Busca al instante: setea queryInput Y query sin esperar el debounce de
+     300 ms (el escáner quiere ver el resultado de inmediato). */
+  const searchNow = useCallback((text: string) => {
+    const t = text.trim();
+    setQueryInput(text);
+    setQuery(t);
+  }, []);
+
   const hasMore = useMemo(() => products.length < total, [products.length, total]);
 
   return {
@@ -201,6 +211,7 @@ export function useProductCatalog(): ProductCatalog {
     query,
     queryInput,
     setQueryInput,
+    searchNow,
     categoryId,
     setCategoryId,
     loading,
