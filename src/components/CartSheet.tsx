@@ -333,15 +333,35 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
 
         <ShareTicketDialog data={shareData} onClose={() => setShareData(null)} />
 
-        <POSButton
-          title={submitting ? 'Registrando…' : 'Confirmar venta'}
-          onPress={handleConfirm}
-          loading={submitting}
-          disabled={items.length === 0}
-          large
-          variant="success"
-          data-testid="btn-confirm-sale"
-        />
+        <div className="flex gap-2">
+          <POSButton
+            title="Cancelar"
+            onPress={async () => {
+              if (items.length === 0) return;
+              const ok = await confirmAction({
+     
+                title: 'Cancelar venta',
+                message: '¿Vaciar el carrito? Se perderán los ítems agregados.',
+                confirmLabel: 'Vaciar',
+   
+              });
+              if (ok) clearCart();
+            }}
+            disabled={items.length === 0 || submitting}
+            large
+            variant="danger"
+            data-testid="btn-cancel-sale"
+          />
+          <POSButton
+            title={submitting ? 'Registrando…' : 'Confirmar venta'}
+            onPress={handleConfirm}
+            loading={submitting}
+            disabled={items.length === 0}
+            large
+            variant="success"
+            data-testid="btn-confirm-sale"
+          />
+        </div>
       </div>
     </aside>
   );
