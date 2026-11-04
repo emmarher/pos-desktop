@@ -7,8 +7,8 @@
  * para evitar problemas de codepage (ESC t 0x00 CP437 en Rust).
  *
  * Reutiliza el layout del servidor (sales.service.ts buildEscPosTicket):
- *   header sin divisores, folio, fecha es-MX, items, totales, pagos y cierre
- *   (mensaje + 9 blancas + divisor '======' + tienda) para el corte.
+ *   header sin divisores, folio, fecha es-MX, items, totales, pagos y pie.
+ *   El corte lo agrega Rust una línea después del último texto.
  * Fase 1: se arma en frontend tras createSale; Fase 2 reusará el mismo
  * string para print_jobs.content (delegada).
  */
@@ -45,7 +45,6 @@ export interface TicketData {
 }
 
 const LINE = '------------------------------------------------'; // 48
-const END_LINE = '================================================'; // 48, cierre antes del corte
 const SEP = '--------------------------------'; // 32 para secciones
 const COL_QTY = 6;
 const COL_PRICE = 10;
@@ -109,6 +108,45 @@ function paymentsBlock(payments: TicketData['payments'], total: number, change?:
     }
   }
   return out;
+}
+
+/**
+ * Normaliza el contenido guardado por el servidor antes de reimprimir.
+ *
+ * - Quita el cierre viejo (9 líneas en blanco + divisor `====` + tienda).
+ * - Centra el encabezado y el pie a 48 columnas, igual que la venta normal.
+ * - Elimina líneas en blanco sobrantes al final.
+ */
+export function normalizeReprintTicket(content: string): string {
+  const lines = content.replace(/\r\n?/g, '\n').split('\n');
+
+  // Busca el divisor de cierre viejo; solo si queda como máximo la tienda debajo.
+  let divider = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (/^={10,}$/.test(lines[i].trim())) {
+      divider = i;
+      break;
+    }
+  }
+  if (divider !== -1 && lines.slice(divider + 1).filter(l => l.trim() !== '').length <= 1) {
+    lines.length = divider;
+  }
+
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+
+  // Encabezado: todo lo anterior a FOLIO (nombre, dirección, teléfono).
+  const headerEnd = lines.findIndex(l => /^FOLIO:/i.test(l));
+  for (let i = 0; i < headerEnd; i++) {
+    if (lines[i].trim()) lines[i] = center(lines[i]);
+  }
+  // Pie: última línea del ticket.
+  if (lines.length > 0) {
+    lines[lines.length - 1] = center(lines[lines.length - 1]);
+  }
+
+  return lines.join('\n');
 }
 
 /**
@@ -177,16 +215,12 @@ export function buildTicket80mm(data: TicketData): string {
   // Pagos
   out += paymentsBlock(payments, total, change);
 
-  // Cierre para el corte: mensaje, 9 líneas en blanco, divisor y tienda.
-  // (Rust agrega su propio feed + GS V después; esto es contenido visible.)
+  // El ticket termina en el pie: Rust agrega una línea en blanco y el corte.
   if (footer) {
     out += center(footer) + '\n';
   } else {
     out += center('GRACIAS POR SU COMPRA') + '\n';
   }
-  out += '\n'.repeat(9);
-  out += END_LINE + '\n';
-  out += center(businessName || 'PUNTO DE VENTA') + '\n';
 
   return out;
 }

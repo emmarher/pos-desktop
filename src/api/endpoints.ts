@@ -35,6 +35,7 @@ import {
   StoredTicket,
 } from '../models';
 import {apiRequest, apiUploadFile, ApiError} from './client';
+import {normalizeReprintTicket} from '../lib/ticket';
 
 /* ──────────────────────────────────────────────────────────────────────
  * AUTH Y LICENCIA
@@ -461,18 +462,21 @@ export function getTicketContent(saleId: string): Promise<StoredTicket> {
  */
 export async function reprintTicket(saleId: string): Promise<'printed' | 'queued'> {
   const ticket = await getTicketContent(saleId);
+  // Mismo formato que la venta normal: encabezado/pie centrados y sin el
+  // cierre viejo de espacios que quedó guardado en tickets anteriores.
+  const content = normalizeReprintTicket(ticket.content);
   // Import dinámico para no crear ciclo: services/hardware no importa este módulo.
   const {printTicketDirect, getPersistedUsbPrinter} = await import('../services/hardware');
   const printer = await getPersistedUsbPrinter();
   if (printer?.printerName) {
     // Hay impresora local: imprimir directo. Si falla, el error se propaga
     // (sin encolar duplicado: el usuario reintenta desde Tickets).
-    await printTicketDirect(ticket.content);
+    await printTicketDirect(content);
     return 'printed';
   }
   // Sin impresora local: delegar al dispositivo con can_print vía cola.
   await enqueuePrintJob({
-    content: ticket.content,
+    content,
     sale_id: saleId,
     job_type: 'SALE_TICKET',
   });

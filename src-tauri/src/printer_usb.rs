@@ -224,17 +224,20 @@ fn is_virtual_printer(name: &str) -> bool {    let lower = name.to_lowercase();
 // Transporte RAW (cross-platform)
 // ---------------------------------------------------------------------------
 
-/// Envía bytes RAW (ya con ESC/POS) a la impresora por nombre del spooler.
+/// Envía un ticket de texto plano (base64) a la impresora por nombre del spooler.
 ///
-/// Content: Vec<u8> en base64 o bytes. El caller ya pasó por build_print_sequence.
+/// El texto se envuelve con `build_print_sequence` (init + ancho 48 + margen +
+/// corte `GS V`). Recibe texto, no ESC/POS ya armado.
 #[tauri::command]
 pub fn print_raw_usb(printer_name: String, data_base64: String) -> Result<usize, String> {
+    use crate::printer::build_print_sequence;
     use base64::Engine as _;
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&data_base64)
         .map_err(|e| format!("base64 inválido: {e}"))?;
-    send_raw(&printer_name, &bytes)?;
-    Ok(bytes.len())
+    let seq = build_print_sequence(&String::from_utf8_lossy(&bytes), 48);
+    send_raw(&printer_name, &seq)?;
+    Ok(seq.len())
 }
 
 /// Envía bytes RAW a la impresora. Interfaz usada por hardware.rs (poll).

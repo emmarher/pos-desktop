@@ -14,10 +14,10 @@ const GS: u8 = 0x1D;
 /// `content` es el texto del ticket (puede incluir \n). Se imprime con
 /// fuente estándar, alineación a la izquierda, margen inferior y corte.
 ///
-/// Margen inferior: 9 líneas en blanco explícitas antes del corte para que
-/// la cuchilla caiga debajo del último texto (el feed corto dejaba el corte
-/// sobre lo impreso). Punto único para venta, reimpresión, poll y prueba.
+/// El corte cae una línea después del último texto. Punto único para venta,
+/// reimpresión, poll y prueba.
 pub fn build_print_sequence(content: &str, width: usize) -> Vec<u8> {
+    let content = content.trim_end_matches(|c| c == '\r' || c == '\n');
     let mut out = Vec::new();
     // Inicialización de la impresora
     out.extend_from_slice(&[ESC, b'@']);
@@ -43,10 +43,8 @@ pub fn build_print_sequence(content: &str, width: usize) -> Vec<u8> {
         out.push(b'\n');
     }
 
-    // Margen inferior: 9 líneas en blanco y corte parcial
-    for _ in 0..9 {
-        out.push(b'\n');
-    }
+    // Una línea en blanco y corte parcial
+    out.push(b'\n');
     out.extend_from_slice(&[GS, b'V', 66, 0]);
     out
 }
@@ -110,12 +108,20 @@ mod tests {
     }
 
     #[test]
-    fn print_sequence_feeds_nine_blank_lines_before_cut() {
+    fn print_sequence_feeds_one_blank_line_before_cut() {
         let seq = build_print_sequence("Hola", 42);
-        // Cola: 9 x \n + corte [GS V 66 0]
-        let tail = &seq[seq.len() - 13..];
-        assert_eq!(&tail[..9], &[b'\n'; 9]);
-        assert_eq!(&tail[9..], &[GS, b'V', 66, 0]);
+        // Cola: 1 x \n + corte [GS V 66 0]
+        let tail = &seq[seq.len() - 5..];
+        assert_eq!(&tail[..1], &[b'\n']);
+        assert_eq!(&tail[1..], &[GS, b'V', 66, 0]);
+    }
+
+    #[test]
+    fn print_sequence_ignores_trailing_blank_lines() {
+        let seq = build_print_sequence("Hola\n\n\n", 42);
+        let tail = &seq[seq.len() - 5..];
+        assert_eq!(&tail[..1], &[b'\n']);
+        assert_eq!(&tail[1..], &[GS, b'V', 66, 0]);
     }
 
     #[test]
