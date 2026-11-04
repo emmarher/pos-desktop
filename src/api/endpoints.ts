@@ -462,9 +462,13 @@ export function getTicketContent(saleId: string): Promise<StoredTicket> {
  */
 export async function reprintTicket(saleId: string): Promise<'printed' | 'queued'> {
   const ticket = await getTicketContent(saleId);
-  // Mismo formato que la venta normal: encabezado/pie centrados y sin el
-  // cierre viejo de espacios que quedó guardado en tickets anteriores.
-  const content = normalizeReprintTicket(ticket.content);
+  // Mismo formato que la venta normal: encabezado/pie centrados, el pie
+  // configurado y sin el cierre viejo de espacios que quedó en tickets anteriores.
+  const {useAuthStore} = await import('../stores/auth.store');
+  const content = normalizeReprintTicket(
+    ticket.content,
+    useAuthStore.getState().tenant?.receipt_footer,
+  );
   // Import dinámico para no crear ciclo: services/hardware no importa este módulo.
   const {printTicketDirect, getPersistedUsbPrinter} = await import('../services/hardware');
   const printer = await getPersistedUsbPrinter();

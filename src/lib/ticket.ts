@@ -114,10 +114,12 @@ function paymentsBlock(payments: TicketData['payments'], total: number, change?:
  * Normaliza el contenido guardado por el servidor antes de reimprimir.
  *
  * - Quita el cierre viejo (9 líneas en blanco + divisor `====` + tienda).
- * - Centra el encabezado y el pie a 48 columnas, igual que la venta normal.
+ * - Centra el encabezado a 48 columnas, igual que la venta normal.
+ * - Reemplaza el pie guardado por el pie configurado, con una línea en blanco
+ *   antes.
  * - Elimina líneas en blanco sobrantes al final.
  */
-export function normalizeReprintTicket(content: string): string {
+export function normalizeReprintTicket(content: string, footer?: string | null): string {
   const lines = content.replace(/\r\n?/g, '\n').split('\n');
 
   // Busca el divisor de cierre viejo; solo si queda como máximo la tienda debajo.
@@ -136,15 +138,23 @@ export function normalizeReprintTicket(content: string): string {
     lines.pop();
   }
 
+  // El pie guardado por el servidor es genérico; se reemplaza por el configurado.
+  if (lines.length > 0) {
+    lines.pop();
+  }
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+
   // Encabezado: todo lo anterior a FOLIO (nombre, dirección, teléfono).
   const headerEnd = lines.findIndex(l => /^FOLIO:/i.test(l));
   for (let i = 0; i < headerEnd; i++) {
     if (lines[i].trim()) lines[i] = center(lines[i]);
   }
-  // Pie: última línea del ticket.
-  if (lines.length > 0) {
-    lines[lines.length - 1] = center(lines[lines.length - 1]);
-  }
+
+  // Una línea en blanco antes del pie, igual que en la venta normal.
+  lines.push('');
+  lines.push(center(footer?.trim() || 'GRACIAS POR SU COMPRA'));
 
   return lines.join('\n');
 }
@@ -215,7 +225,9 @@ export function buildTicket80mm(data: TicketData): string {
   // Pagos
   out += paymentsBlock(payments, total, change);
 
-  // El ticket termina en el pie: Rust agrega una línea en blanco y el corte.
+  // El ticket termina en el pie: una línea en blanco antes, y Rust agrega
+  // el corte una línea después.
+  out += '\n';
   if (footer) {
     out += center(footer) + '\n';
   } else {
