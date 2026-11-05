@@ -10,7 +10,23 @@
 //!   - api_request(path, method, body) → ejecuta la petición
 
 use std::sync::Mutex;
+use std::time::Duration;
 use tauri::State;
+
+/// Timeout de red (recomendado en el front como HTTP_TIMEOUT_MS). Evita colgar
+/// la app cuando el servidor está caído (TCP "Host is down"/os error 64) y
+/// aguardando el backlog en vez de fallar rápido.
+const HTTP_TIMEOUT_MS: u64 = 15_000;
+
+/// Cliente HTTP común con timeout: un `Client::new()` sin `.timeout()` aguanta
+/// el backlog TCP de una IP muerta en Windows y cuelga la app. La construcción
+/// del builder con timeout no puede fallar en la práctica.
+fn http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(Duration::from_millis(HTTP_TIMEOUT_MS))
+        .build()
+        .expect("reqwest builder con timeout no puede fallar")
+}
 
 /// Estado del cliente HTTP (servidor + token), compartido entre comandos.
 #[derive(Default)]
@@ -86,7 +102,7 @@ pub async fn api_request(
     let url = format!("http://{ip}:{port}{}", input.path);
     let method = input.method.to_uppercase();
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut req = client
         .request(
             match method.as_str() {
@@ -198,7 +214,7 @@ pub async fn api_upload_file(
 
     let url = format!("http://{ip}:{port}{}", input.path);
 
-    let client = reqwest::Client::new();
+    let client = http_client();
     let mut req = client.post(&url).multipart(
         multipart::Form::new().part(
             "file",

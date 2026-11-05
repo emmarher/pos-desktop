@@ -11,7 +11,8 @@ import {useEffect, useState} from 'react';
 import {BrowserRouter} from 'react-router-dom';
 import SplashScreen from './components/SplashScreen';
 import {useAuthStore} from './stores/auth.store';
-import {hydrateServerStore} from './lib/serverBase';
+import {hydrateServerStore, readServerFromStorage} from './lib/serverBase';
+import {testServer, discoverServer} from './api/discovery';
 import AppRoutes from './navigation/AppRoutes';
 import ConfirmDialog from './components/ConfirmDialog';
 
@@ -31,7 +32,18 @@ export default function App() {
               de forma síncrona; sin esto, tras reiniciar la app con sesión
               guardada todas las fotos caían al placeholder). */
         await hydrateServerStore();
-        /* 2) Sesión guardada. */
+        /* 2) Verificar que la IP guardada responde; si no (p. ej. cambió o el
+              server está caído), rediscoveryear antes de restaurar la sesión.
+              Sin esto, /auth/refresh pegaba contra la IP muerta vía Rust sin
+              timeout, colgaba el arranque y dejaba la app sin servidor. */
+        const saved = await readServerFromStorage();
+        if (saved) {
+          const ok = await testServer(saved); // timeout corto (~4 s) de /health
+          if (!ok) await discoverServer();    // reintenta la guardada y si falla, mDNS/UDP/localhost
+        } else {
+          await discoverServer(); // sin guardada: descubrir antes de restaurar sesión
+        }
+        /* 3) Sesión guardada (ahora contra una IP viva). */
         await restoreSession();
       } catch {
         /* fallo de arranque: se ignora y se va a la pantalla de conexión */
