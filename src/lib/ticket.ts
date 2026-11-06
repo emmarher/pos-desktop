@@ -13,7 +13,7 @@
  * string para print_jobs.content (delegada).
  */
 
-import type { CartItem } from '../models';
+import type { CartItem, TenantSettings } from '../models';
 
 export interface TicketData {
   /** Nombre comercial del ticket (tenant.business_name) */
@@ -41,13 +41,52 @@ export interface TicketData {
   /** Totales derivados del carrito */
   subtotal: number;
   discount: number;
+  tax?: number;
   total: number;
-  /** Pagos registrados */
-  payments: { method: string; amount: number }[];
+  /** Pagos registrados (referenceCode = últimos 4 / folio / referencia) */
+  payments: { method: string; amount: number; referenceCode?: string | null }[];
   /** Vuelto en efectivo (payment_change del SaleResponse) */
   change?: number;
   /** Pie de ticket (tenant.receipt_footer) */
   footer?: string | null;
+}
+
+/** Datos de encabezado/pie compartidos por el impreso y el PNG/PDF. */
+export interface TicketBranding {
+  businessName: string;
+  businessAddress: string | null;
+  businessPhone: string | null;
+  businessEmail: string | null;
+  businessRfc: string | null;
+  ticketHeader: string | null;
+  footer: string | null;
+}
+
+/**
+ * Único lugar que decide el branding del ticket: licencia (D1) → tenant.
+ * Evita que impresión y descarga muestren datos distintos.
+ */
+export function resolveTicketBranding(
+  tenant: TenantSettings | null | undefined,
+  licenseCustomer?: string | null,
+): TicketBranding {
+  return {
+    businessName: licenseCustomer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
+    businessAddress: tenant?.address ?? null,
+    businessPhone: tenant?.phone ?? null,
+    businessEmail: tenant?.email ?? null,
+    businessRfc: tenant?.rfc ?? null,
+    ticketHeader: tenant?.ticket_header ?? null,
+    footer: tenant?.receipt_footer ?? null,
+  };
+}
+
+/** Cantidad del ticket ("2", "1.500 kg", "1cja 1.50kg"); igual en papel y PNG/PDF. */
+export function formatItemQty(it: CartItem): string {
+  if (it.isCaj) {
+    return `1cja ${it.weightKg != null ? it.weightKg.toFixed(2) + 'kg' : ''}`.trim();
+  }
+  return it.weightKg != null ? `${it.weightKg.toFixed(3)} kg` : `${it.quantity}`;
 }
 
 const LINE = '------------------------------------------------'; // 48
@@ -102,7 +141,8 @@ function paymentsBlock(payments: TicketData['payments'], total: number, change?:
   let out = '\nPAGOS:\n';
   for (const p of payments) {
     const label = labels[p.method] ?? p.method;
-    out += `${padRight(label, 28)}${padLeft(money(p.amount), 12)}\n`;
+    const ref = p.referenceCode?.trim() ? ` ${p.referenceCode}` : '';
+    out += `${padRight(label + ref, 28)}${padLeft(money(p.amount), 12)}\n`;
   }
   if (typeof change === 'number' && change > 0.005) {
     out += `${padRight('VUELTO', 28)}${padLeft(money(change), 12)}\n`;
@@ -184,6 +224,7 @@ export function buildTicket80mm(data: TicketData): string {
     items,
     subtotal,
     discount,
+    tax,
     total,
     payments,
     change,
@@ -201,19 +242,15 @@ export function buildTicket80mm(data: TicketData): string {
   if (businessRfc?.trim()) out += center(`RFC: ${businessRfc}`) + '\n';
   out += `FOLIO: ${folio}\n`;
   out += `FECHA: ${formatDate(createdAt)}\n`;
-  if (cashierName) out += `CAJERO: ${cashierName}\n`;
-  if (customerName) out += `CLIENTE: ${customerName}\n`;
+  if (cashierName?.trim()) out += `CAJERO: ${cashierName}\n`;
+  if (customerName?.trim()) out += `CLIENTE: ${customerName}\n`;
 
   // Tabla items
   out += `${padRight('CANT', COL_QTY)}${padRight('PRODUCTO', 16)}${padLeft('P.UNIT', COL_PRICE)}${padLeft('IMPORTE', COL_SUB)}\n`;
   out += SEP + ' ' + SEP.slice(0, 15) + '\n';
 
   for (const it of items) {
-    const qtyLabel = it.isCaj
-      ? `1cja ${it.weightKg != null ? it.weightKg.toFixed(2) + 'kg' : ''}`.trim()
-      : it.weightKg != null && !it.isCaj
-        ? `${it.weightKg.toFixed(3)} kg`
-        : `${it.quantity}`;
+    const qtyLabel = formatItemQty(it);
     const name = it.product.name.slice(0, 16);
     const unit = money(it.unitPrice);
     const sub = money(it.subtotal);
@@ -232,6 +269,9 @@ export function buildTicket80mm(data: TicketData): string {
   if (discount > 0.005) {
     out += `${padRight('DESCUENTO', 28)}${padLeft('-' + money(discount), 12)}\n`;
   }
+  if (typeof tax === 'number' && tax > 0.005) {
+    out += `${padRight('IMPUESTO', 28)}${padLeft(money(tax), 12)}\n`;
+  }
   out += `${padRight('TOTAL', 28)}${padLeft(money(total), 12)}\n`;
 
   // Pagos
@@ -240,7 +280,7 @@ export function buildTicket80mm(data: TicketData): string {
   // El ticket termina en el pie: una línea en blanco antes, y Rust agrega
   // el corte una línea después.
   out += '\n';
-  if (footer) {
+  if (footer?.trim()) {
     out += center(footer) + '\n';
   } else {
     out += center('GRACIAS POR SU COMPRA') + '\n';

@@ -8,16 +8,21 @@ import {useResolvedImageUrl} from '../lib/images';
 
 export interface TicketPreviewItem {
   name: string;
-  /** Cantidad ya formateada: "2", "1.500 kg", "1 caja × 5.000 kg" */
+  /** Cantidad ya formateada: "2", "1.500 kg", "1cja 1.50kg" */
   qty: string;
   unitPrice: number;
   subtotal: number;
+  /** Descuento aplicado al ítem; se oculta si es 0. */
+  discount?: number;
 }
 
 export interface TicketPreviewData {
   businessName: string;
   businessAddress?: string | null;
   businessPhone?: string | null;
+  businessEmail?: string | null;
+  businessRfc?: string | null;
+  ticketHeader?: string | null;
   logoUrl?: string | null;
   folio: string;
   createdAt: string;
@@ -26,8 +31,9 @@ export interface TicketPreviewData {
   items: TicketPreviewItem[];
   subtotal: number;
   discount: number;
+  tax?: number;
   total: number;
-  payments: {method: string; amount: number}[];
+  payments: {method: string; amount: number; referenceCode?: string | null}[];
   change?: number;
   footer?: string | null;
 }
@@ -39,6 +45,9 @@ const METHOD_LABELS: Record<string, string> = {
   CREDIT: 'Crédito',
   VOUCHER: 'Voucher',
 };
+
+/** Un campo vacío o con solo espacios no se dibuja. */
+const hasText = (v?: string | null): v is string => !!v?.trim();
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 const dateText = (iso: string) => {
@@ -78,16 +87,19 @@ export default function TicketPreview({data}: {data: TicketPreviewData}) {
         <div style={{fontSize: 14, fontWeight: 700, textTransform: 'uppercase'}}>
           {data.businessName}
         </div>
-        {data.businessAddress && <div>{data.businessAddress}</div>}
-        {data.businessPhone && <div>Tel: {data.businessPhone}</div>}
+        {hasText(data.ticketHeader) && <div>{data.ticketHeader}</div>}
+        {hasText(data.businessAddress) && <div>{data.businessAddress}</div>}
+        {hasText(data.businessPhone) && <div>Tel: {data.businessPhone}</div>}
+        {hasText(data.businessEmail) && <div>Email: {data.businessEmail}</div>}
+        {hasText(data.businessRfc) && <div>RFC: {data.businessRfc}</div>}
       </div>
 
       <div style={{borderTop: '1px dashed #999', margin: '8px 0'}} />
 
       <div>FOLIO: {data.folio}</div>
       <div>FECHA: {dateText(data.createdAt)}</div>
-      {data.cashierName && <div>CAJERO: {data.cashierName}</div>}
-      {data.customerName && <div>CLIENTE: {data.customerName}</div>}
+      {hasText(data.cashierName) && <div>CAJERO: {data.cashierName}</div>}
+      {hasText(data.customerName) && <div>CLIENTE: {data.customerName}</div>}
 
       <div style={{borderTop: '1px dashed #999', margin: '8px 0'}} />
 
@@ -100,6 +112,9 @@ export default function TicketPreview({data}: {data: TicketPreviewData}) {
             </span>
             <span>{money(it.subtotal)}</span>
           </div>
+          {typeof it.discount === 'number' && it.discount > 0.005 && (
+            <div style={{paddingLeft: 8}}>Desc: -{money(it.discount)}</div>
+          )}
         </div>
       ))}
 
@@ -109,10 +124,16 @@ export default function TicketPreview({data}: {data: TicketPreviewData}) {
         <span>SUBTOTAL</span>
         <span>{money(data.subtotal)}</span>
       </div>
-      {data.discount > 0 && (
+      {data.discount > 0.005 && (
         <div style={{display: 'flex', justifyContent: 'space-between'}}>
           <span>DESCUENTO</span>
           <span>-{money(data.discount)}</span>
+        </div>
+      )}
+      {typeof data.tax === 'number' && data.tax > 0.005 && (
+        <div style={{display: 'flex', justifyContent: 'space-between'}}>
+          <span>IMPUESTO</span>
+          <span>{money(data.tax)}</span>
         </div>
       )}
       <div style={{display: 'flex', justifyContent: 'space-between', fontWeight: 700}}>
@@ -125,7 +146,10 @@ export default function TicketPreview({data}: {data: TicketPreviewData}) {
           <div style={{borderTop: '1px dashed #999', margin: '8px 0'}} />
           {data.payments.map((p, i) => (
             <div key={`${p.method}-${i}`} style={{display: 'flex', justifyContent: 'space-between'}}>
-              <span>{METHOD_LABELS[p.method] ?? p.method}</span>
+              <span>
+                {METHOD_LABELS[p.method] ?? p.method}
+                {hasText(p.referenceCode) ? ` · ${p.referenceCode}` : ''}
+              </span>
               <span>{money(p.amount)}</span>
             </div>
           ))}
@@ -138,7 +162,9 @@ export default function TicketPreview({data}: {data: TicketPreviewData}) {
         </div>
       )}
 
-      <div style={{textAlign: 'center', marginTop: 12}}>{data.footer || 'Gracias por su compra'}</div>
+      <div style={{textAlign: 'center', marginTop: 12}}>
+        {hasText(data.footer) ? data.footer : 'Gracias por su compra'}
+      </div>
     </div>
   );
 }

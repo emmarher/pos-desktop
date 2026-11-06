@@ -15,6 +15,7 @@ import type {SaleDetail} from '../models';
 import {useAuthStore} from '../stores/auth.store';
 import ShareTicketDialog from './ShareTicketDialog';
 import type {TicketPreviewData} from './TicketPreview';
+import {resolveTicketBranding} from '../lib/ticket';
 
 /** Etiquetas legibles de los métodos de pago. */
 export const METHOD_LABELS: Record<string, string> = {
@@ -90,24 +91,29 @@ export default function SaleDetailDialog({
 
   /** Arma el ticket visual desde el detalle (incluye licencia y contacto). */
   const buildShareData = (d: SaleDetail): TicketPreviewData => ({
-    businessName: license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
-    businessAddress: tenant?.address ?? null,
-    businessPhone: tenant?.phone ?? null,
+    ...resolveTicketBranding(tenant, license?.customer),
     logoUrl: tenant?.logo_url ?? null,
     folio: d.folio,
     createdAt: d.created_at,
+    cashierName: d.seller_name ?? null,
+    customerName: d.customer_name ?? null,
     items: d.items.map(it => ({
       name: it.product_name,
-      qty: it.alternate_quantity != null ? `${it.alternate_quantity} kg` : `${it.quantity}`,
+      qty: it.alternate_quantity != null ? `${it.alternate_quantity.toFixed(3)} kg` : `${it.quantity}`,
       unitPrice: it.unit_price,
       subtotal: it.subtotal,
+      discount: it.discount_applied,
     })),
     subtotal: d.subtotal,
     discount: d.discount,
+    tax: d.tax,
     total: d.total,
-    payments: d.payments.map(p => ({method: p.method, amount: p.amount})),
+    payments: d.payments.map(p => ({
+      method: p.method,
+      amount: p.amount,
+      referenceCode: p.reference_code,
+    })),
     change: d.payments.reduce((sum, p) => sum + p.change_amount, 0),
-    footer: tenant?.receipt_footer ?? null,
   });
 
   return (

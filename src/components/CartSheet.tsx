@@ -18,7 +18,7 @@ import {toast} from '../hooks/useToast';
 import {confirmAction} from '../lib/confirm';
 import POSButton from './POSButton';
 import {formatWeightKg} from '../lib/scale';
-import {buildTicket80mm} from '../lib/ticket';
+import {buildTicket80mm, formatItemQty, resolveTicketBranding} from '../lib/ticket';
 import {printTicketDirect, getPersistedUsbPrinter} from '../services/hardware';
 import ShareTicketDialog from './ShareTicketDialog';
 import type {TicketPreviewData} from './TicketPreview';
@@ -132,24 +132,26 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
       }
       if (persisted?.printerName) {
         try {
+          // Un solo origen para papel y PNG/PDF: si un campo está vacío no se
+          // imprime ni se dibuja en ninguno de los dos.
+          const branding = resolveTicketBranding(tenant, license?.customer);
+          const customerName = useCartStore.getState().customer?.name ?? null;
           const ticket = buildTicket80mm({
-            // Nombre firmado en la licencia (D1); business_name como fallback.
-            businessName: license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
-            businessAddress: tenant?.address ?? null,
-            businessPhone: tenant?.phone ?? null,
-            businessEmail: tenant?.email ?? null,
-            businessRfc: tenant?.rfc ?? null,
-            ticketHeader: tenant?.ticket_header ?? null,
+            ...branding,
             folio,
             createdAt: (sale as unknown as {created_at?: string})?.created_at,
             cashierName: user?.name ?? null,
+            customerName,
             items: snapshotItems,
             subtotal: snapshotSubtotal,
             discount: snapshotDiscount,
             total: snapshotTotal,
-            payments: snapshotPayments.map(p => ({method: p.method, amount: p.amount})),
+            payments: snapshotPayments.map(p => ({
+              method: p.method,
+              amount: p.amount,
+              referenceCode: p.reference_code,
+            })),
             change: (sale as unknown as {payment_change?: number})?.payment_change,
-            footer: tenant?.receipt_footer ?? null,
           });
           await printTicketDirect(ticket);
           printed = true;
@@ -159,30 +161,28 @@ export default function CartSheet({collapsed, onToggleCollapse, onSaleDone}: Car
             printErr instanceof Error ? printErr.message : String(printErr ?? '');
           // La venta quedó registrada: ofrecer el ticket en PNG/PDF.
           setShareData({
-            businessName:
-              license?.customer?.trim() || tenant?.business_name || 'PUNTO DE VENTA',
-            businessAddress: tenant?.address ?? null,
-            businessPhone: tenant?.phone ?? null,
+            ...resolveTicketBranding(tenant, license?.customer),
             logoUrl: tenant?.logo_url ?? null,
             folio,
             createdAt: (sale as unknown as {created_at?: string})?.created_at ?? new Date().toISOString(),
             cashierName: user?.name ?? null,
+            customerName: useCartStore.getState().customer?.name ?? null,
             items: snapshotItems.map(it => ({
               name: it.product.name,
-              qty: it.isCaj
-                ? `1 caja × ${formatWeightKg(it.weightKg ?? 0)} kg`
-                : it.weightKg != null
-                  ? `${formatWeightKg(it.weightKg)} kg`
-                  : `${it.quantity}`,
+              qty: formatItemQty(it),
               unitPrice: it.unitPrice,
               subtotal: it.subtotal,
+              discount: it.discount,
             })),
             subtotal: snapshotSubtotal,
             discount: snapshotDiscount,
             total: snapshotTotal,
-            payments: snapshotPayments.map(p => ({method: p.method, amount: p.amount})),
+            payments: snapshotPayments.map(p => ({
+              method: p.method,
+              amount: p.amount,
+              referenceCode: p.reference_code,
+            })),
             change: (sale as unknown as {payment_change?: number})?.payment_change,
-            footer: tenant?.receipt_footer ?? null,
           });
         }
       }
