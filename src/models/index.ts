@@ -23,6 +23,9 @@ export interface TenantSettings {
   business_name: string;
   address?: string | null;
   phone?: string | null;
+  email?: string | null;
+  rfc?: string | null;
+  ticket_header?: string | null;
   receipt_footer?: string | null;
   logo_url?: string | null;
   dark_mode?: boolean;

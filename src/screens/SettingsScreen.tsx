@@ -191,6 +191,9 @@ export default function SettingsScreen({
       await patchTenant({
         address: data.address,
         phone: data.phone,
+        email: data.email,
+        rfc: data.rfc,
+        ticket_header: data.ticket_header,
         receipt_footer: data.receipt_footer,
       });
       toast.success('Configuración guardada.');

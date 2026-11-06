@@ -83,6 +83,10 @@ scaffold en `serial.rs`, `printer.rs`, `scale.rs`, `hardware.rs`).
 
 ### Impresora ESC/POS
 - [x] `printer.rs`: builder ESC/POS (init, alineación, wrap, feed, corte, barcode, QR).
+- [x] Ticket 80mm con encabezado, email, RFC y pie configurados en Ajustes
+      (ventas nuevas); los campos vacíos se omiten. El ticket guardado
+      (`stored_tickets`) los incluye desde la venta, así que la reimpresión
+      también los muestra.
 - [x] `list_ports` (serial/lugar del PC) y selección de impresora en UI de
       configuración (HardwareScreen).
 - [ ] Imprimir el ticket real tras la venta (marcar `print_jobs` COMPLETED/FAILED vía

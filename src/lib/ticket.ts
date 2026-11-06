@@ -22,6 +22,12 @@ export interface TicketData {
   businessAddress?: string | null;
   /** Teléfono opcional */
   businessPhone?: string | null;
+  /** Email opcional */
+  businessEmail?: string | null;
+  /** RFC opcional */
+  businessRfc?: string | null;
+  /** Encabezado extra del ticket (tenant.ticket_header) */
+  ticketHeader?: string | null;
   /** Folio V-000001 del SaleResponse */
   folio: string;
   /** Fecha de la venta (ISO). Si no se pasa usa now */
@@ -168,6 +174,9 @@ export function buildTicket80mm(data: TicketData): string {
     businessName,
     businessAddress,
     businessPhone,
+    businessEmail,
+    businessRfc,
+    ticketHeader,
     folio,
     createdAt,
     cashierName,
@@ -185,8 +194,11 @@ export function buildTicket80mm(data: TicketData): string {
 
   // Header centrado (sin divisores iniciales: van al cierre para el corte)
   out += center(businessName || 'PUNTO DE VENTA') + '\n';
-  if (businessAddress) out += center(businessAddress) + '\n';
-  if (businessPhone) out += center(`Tel: ${businessPhone}`) + '\n';
+  if (ticketHeader?.trim()) out += center(ticketHeader) + '\n';
+  if (businessAddress?.trim()) out += center(businessAddress) + '\n';
+  if (businessPhone?.trim()) out += center(`Tel: ${businessPhone}`) + '\n';
+  if (businessEmail?.trim()) out += center(`Email: ${businessEmail}`) + '\n';
+  if (businessRfc?.trim()) out += center(`RFC: ${businessRfc}`) + '\n';
   out += `FOLIO: ${folio}\n`;
   out += `FECHA: ${formatDate(createdAt)}\n`;
   if (cashierName) out += `CAJERO: ${cashierName}\n`;
