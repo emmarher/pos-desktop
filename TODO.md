@@ -109,6 +109,25 @@ scaffold en `serial.rs`, `printer.rs`, `scale.rs`, `hardware.rs`).
 
 ---
 
+## FASE 1.5 — Arranque, sesión y licencia (plan activo 2026-11-06)
+
+> Plan detallado: `docs/plan-arranque-sesion-licencia.md`. Decisiones D13/D14 en
+> `docs/decisiones-y-estado.md`.
+
+- [x] `/auth/refresh` resuelve permisos de BD (antes el token refrescado los
+      perdía y productos/categorías daban 403). Test `auth-refresh.test.ts`.
+      (Verificado 2026-11-06: 89/89 tests, `tsc` limpio.)
+- [x] Sesión **sin persistencia**: tokens solo en memoria, login en cada
+      arranque, `clearPersistedSession()` borra restos viejos. (Implementado y
+      verificado 2026-11-06: `tsc` limpio.)
+- [ ] Fase 3: reconexión automática cada 5 s + recarga del catálogo al reconectar.
+- [ ] Fase 4: `ConnectionScreen` reintenta de verdad cada 5 s.
+- [ ] Fase 5: `connect_timeout(3 s)` y timeouts de discovery más cortos.
+- [ ] Fase 6: activar/renovar licencia desde el login (wizard + upload sin JWT
+      para el mismo tenant).
+
+---
+
 ## FASE 3 — Sincronización y QoS (paridad completa)
 
 - [ ] Sync command-based (`/sync/push`, `/sync/pull`, `/sync/ack`) desde Rust.
